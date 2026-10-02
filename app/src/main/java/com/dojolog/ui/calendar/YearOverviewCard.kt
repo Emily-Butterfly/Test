@@ -20,6 +20,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -27,11 +28,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.drawText
@@ -44,11 +53,13 @@ import com.dojolog.domain.YearOverview
 import com.dojolog.ui.Fmt
 import com.dojolog.ui.components.ArtFilterChips
 import com.dojolog.ui.components.SectionCard
+import com.dojolog.ui.components.drawUnratedHatch
 import com.dojolog.ui.theme.DojoColors
 import com.dojolog.ui.theme.LocalDisciplineColors
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.Month
+import java.time.YearMonth
 import java.time.format.TextStyle
 import java.time.temporal.ChronoUnit
 import java.util.Locale
@@ -69,6 +80,7 @@ internal fun YearOverviewCard(
     onPreviousYear: () -> Unit,
     onNextYear: () -> Unit,
     onShowDay: (LocalDate) -> Unit,
+    onShowMonth: (YearMonth) -> Unit,
 ) {
     var picked by rememberSaveable(overview.year) { mutableStateOf<Long?>(null) }
     val pickedDate = picked?.let(LocalDate::ofEpochDay)
@@ -98,9 +110,11 @@ internal fun YearOverviewCard(
             firstDayOfWeek = firstDayOfWeek,
             today = today,
             picked = pickedDate,
+            artName = art?.let { names[it] ?: it },
             onPick = { picked = it.toEpochDay() },
+            onShowMonth = onShowMonth,
         )
-        DayReadout(pickedDate, pickedDate?.let { overview.days[it] }, names, today, onShowDay)
+        DayReadout(pickedDate, pickedDate?.let { overview.days[it] }, names, art?.let { names[it] ?: it }, today, onShowDay)
         CalendarLegend(
             entries = overview.arts.map { LegendEntry(it.key, it.name) },
             focus = pickedDate?.let { overview.days[it] }?.marks.orEmpty(),
@@ -116,6 +130,8 @@ private fun DayReadout(
     date: LocalDate?,
     day: YearDay?,
     names: Map<String, String>,
+    /** The art the grid is limited to, if any: other arts' days show as empty. */
+    artName: String?,
     today: LocalDate,
     onShowDay: (LocalDate) -> Unit,
 ) {
@@ -131,16 +147,23 @@ private fun DayReadout(
                 "Tap a day to see what you trained.",
                 style = MaterialTheme.typography.bodySmall,
                 color = DojoColors.TextMuted,
-                modifier = Modifier.weight(1f),
+                // Screen readers open months through the grid's actions instead.
+                modifier = Modifier
+                    .weight(1f)
+                    .clearAndSetSemantics { },
             )
             return@Row
         }
         Column(Modifier.weight(1f)) {
-            Text(Fmt.weekdayDate(date), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+            Text(
+                (if (date == today) "Today · " else "") + Fmt.weekdayDate(date),
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
             Text(
                 when {
                     day == null && date.isAfter(today) -> "Still to come"
-                    day == null -> "No training"
+                    day == null -> if (artName != null) "No $artName training" else "No training"
                     else -> day.marks.joinToString(" · ") { mark ->
                         val score = day.bestScores[mark.disciplineKey] ?: 0f
                         "${names[mark.disciplineKey] ?: mark.disciplineKey} ${if (score > 0f) Fmt.score(score) else "unrated"}"
@@ -164,7 +187,9 @@ private fun YearHeatmap(
     firstDayOfWeek: DayOfWeek,
     today: LocalDate,
     picked: LocalDate?,
+    artName: String?,
     onPick: (LocalDate) -> Unit,
+    onShowMonth: (YearMonth) -> Unit,
 ) {
     val colors = LocalDisciplineColors.current
     val measurer = rememberTextMeasurer()
@@ -173,17 +198,41 @@ private fun YearHeatmap(
     val year = overview.year
     val gridStart = Stats.yearGridStart(year, firstDayOfWeek)
     val weeks = (ChronoUnit.DAYS.between(gridStart, Stats.yearGridEnd(year, firstDayOfWeek)).toInt() + 1) / 7
-    val description = "$year: " + Fmt.count(overview.trainingDays, "training day") + ". " +
+    val description = "$year" + (if (artName != null) ", $artName" else "") + ": " +
+        Fmt.count(overview.trainingDays, "training day") + ". " +
         Month.entries.mapIndexed { index, month ->
             "${month.getDisplayName(TextStyle.FULL, locale)} ${Fmt.count(overview.monthDays[index], "day")}"
-        }.joinToString(", ")
+        }.joinToString(", ") + ". Open a month from the actions."
+    // Screen readers can't pick a square; they open a month in the calendar instead.
+    val monthActions = Month.entries.mapIndexedNotNull { index, month ->
+        if (overview.monthDays[index] == 0) {
+            null
+        } else {
+            CustomAccessibilityAction("Show ${month.getDisplayName(TextStyle.FULL, locale)} $year in calendar") {
+                onShowMonth(YearMonth.of(year, month))
+                true
+            }
+        }
+    }
+    // Room for the labels as the font size setting draws them.
+    val density = LocalDensity.current
+    val monthLabels = remember(measurer, labelStyle, locale, density) {
+        with(density) {
+            Month.entries.maxOf { measurer.measure(it.getDisplayName(TextStyle.SHORT, locale), labelStyle).size.height }.toDp()
+        }
+    }.coerceAtLeast(16.dp)
+    val dayLabels = remember(measurer, labelStyle, locale, firstDayOfWeek, density) {
+        with(density) {
+            listOf(1, 3, 5).maxOf {
+                measurer.measure(firstDayOfWeek.plus(it.toLong()).getDisplayName(TextStyle.NARROW, locale), labelStyle).size.width
+            }.toDp() + 4.dp
+        }
+    }.coerceAtLeast(14.dp)
 
     BoxWithConstraints(Modifier.fillMaxWidth()) {
-        val dayLabels = 14.dp
         val strips = if ((maxWidth - dayLabels) / weeks >= 9.dp) 1 else 2
         val perStrip = (weeks + strips - 1) / strips
         val pitch = ((maxWidth - dayLabels) / perStrip).coerceAtMost(16.dp)
-        val monthLabels = 16.dp
         val stripGap = 8.dp
         val height = (monthLabels + pitch * 7) * strips + stripGap * (strips - 1)
 
@@ -191,7 +240,7 @@ private fun YearHeatmap(
             Modifier
                 .fillMaxWidth()
                 .height(height)
-                .pointerInput(year, firstDayOfWeek, strips, perStrip, pitch) {
+                .pointerInput(year, firstDayOfWeek, strips, perStrip, pitch, monthLabels, dayLabels) {
                     detectTapGestures { offset ->
                         val stripHeight = (monthLabels + pitch * 7).toPx() + stripGap.toPx()
                         val strip = floor(offset.y / stripHeight).toInt()
@@ -204,7 +253,10 @@ private fun YearHeatmap(
                         if (week < weeks && date.year == year) onPick(date)
                     }
                 }
-                .semantics { contentDescription = description },
+                .semantics {
+                    contentDescription = description
+                    customActions = monthActions
+                },
         ) {
             val pitchPx = pitch.toPx()
             val gap = (pitchPx * 0.18f).coerceAtLeast(1.dp.toPx())
@@ -251,17 +303,14 @@ private fun YearHeatmap(
                                 radius,
                             )
                             day.main.level > 0 -> drawRoundRect(colors.rampForKey(day.main.disciplineKey).fill(day.main.level), topLeft, square, radius)
-                            else -> {
-                                // Trained but not rated: an outline in the art's colour.
-                                val ramp = colors.rampForKey(day.main.disciplineKey)
-                                drawRoundRect(ramp.steps[0].copy(alpha = 0.35f), topLeft, square, radius)
-                                val stroke = 1.dp.toPx()
-                                drawRoundRect(
-                                    ramp.identity,
-                                    topLeft + Offset(stroke / 2, stroke / 2),
-                                    Size(cell - stroke, cell - stroke),
-                                    radius,
-                                    style = Stroke(stroke),
+                            // Trained but not rated: hatched, as in the month and the key.
+                            else -> clipPath(Path().apply { addRoundRect(RoundRect(Rect(topLeft, square), radius)) }) {
+                                drawUnratedHatch(
+                                    colors.rampForKey(day.main.disciplineKey),
+                                    topLeft,
+                                    square,
+                                    gap = 3.dp.toPx(),
+                                    stroke = 1.dp.toPx(),
                                 )
                             }
                         }

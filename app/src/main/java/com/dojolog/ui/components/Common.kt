@@ -34,7 +34,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -207,16 +209,22 @@ fun ResultBadge(result: MatchResult, modifier: Modifier = Modifier) {
 
 /** Diagonal hatching in a martial art's colour: trained, but not rated. */
 fun Modifier.unratedHatch(ramp: Ramp): Modifier = drawBehind {
-    clipRect {
-        drawRect(ramp.steps[0].copy(alpha = 0.30f))
-        val gap = 5.dp.toPx()
-        val stroke = 1.5.dp.toPx()
-        var x = -size.height
-        while (x < size.width) {
+    drawUnratedHatch(ramp, Offset.Zero, size, gap = 5.dp.toPx(), stroke = 1.5.dp.toPx())
+}
+
+/**
+ * The hatching of [Modifier.unratedHatch] inside one rectangle, for canvases that draw many
+ * days; small squares pass a smaller [gap] and [stroke] so a few lines still show.
+ */
+fun DrawScope.drawUnratedHatch(ramp: Ramp, topLeft: Offset, size: Size, gap: Float, stroke: Float) {
+    clipRect(topLeft.x, topLeft.y, topLeft.x + size.width, topLeft.y + size.height) {
+        drawRect(ramp.steps[0].copy(alpha = 0.30f), topLeft, size)
+        var x = topLeft.x - size.height
+        while (x < topLeft.x + size.width) {
             drawLine(
                 color = ramp.identity.copy(alpha = 0.8f),
-                start = Offset(x, size.height),
-                end = Offset(x + size.height, 0f),
+                start = Offset(x, topLeft.y + size.height),
+                end = Offset(x + size.height, topLeft.y),
                 strokeWidth = stroke,
             )
             x += gap

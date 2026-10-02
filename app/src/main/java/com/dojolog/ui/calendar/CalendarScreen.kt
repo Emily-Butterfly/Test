@@ -217,6 +217,10 @@ fun CalendarScreen(
                         viewModel.select(date)
                         scope.launch { listState.animateScrollToItem(0) }
                     },
+                    onShowMonth = { month ->
+                        viewModel.showMonth(month)
+                        scope.launch { listState.animateScrollToItem(0) }
+                    },
                 )
             }
         }
