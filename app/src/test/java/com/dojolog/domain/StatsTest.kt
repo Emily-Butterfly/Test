@@ -324,6 +324,25 @@ class StatsTest {
     }
 
     @Test
+    fun everyScreenNamesAnArtAsItWasFirstLogged() {
+        // Logged first as "Bjj" (but dated later), then "BJJ" on an earlier day.
+        val sessions = listOf(
+            session(1, today, discipline = "Bjj", techniques = listOf(entry(jab)), createdAt = 10),
+            session(2, today.minusDays(20), discipline = "BJJ", techniques = listOf(entry(armbar)), createdAt = 20),
+            session(3, today.minusDays(3), discipline = " ", createdAt = 30),
+        )
+        assertEquals(mapOf("bjj" to "Bjj"), Stats.artNames(sessions))
+        val summaries = Stats.techniqueSummaries(listOf(armbar, jab), sessions)
+        assertEquals(listOf("Bjj", "Bjj"), summaries.map { it.arts.single().name })
+        assertEquals("Bjj", Stats.techniqueDetail(armbar, sessions, today).summary.arts.single().name)
+        // Stats for a period that only has the "BJJ" session still use the first spelling.
+        val overview = Stats.overview(sessions, listOf(armbar, jab), StatsPeriod.DAYS_90, today, DayOfWeek.MONDAY)
+        assertEquals(listOf("Bjj", "Unspecified"), overview.disciplines.map { it.name })
+        val top = Stats.topTechniques(listOf(armbar, jab), sessions.filter { it.id == 2L }, names = Stats.artNames(sessions))
+        assertEquals("Bjj", top.single().arts.single().name)
+    }
+
+    @Test
     fun topTechniquesCanBeLimitedToOneMartialArt() {
         val sessions = listOf(
             session(1, today, discipline = "Muay Thai", techniques = listOf(entry(jab, reps = 10))),

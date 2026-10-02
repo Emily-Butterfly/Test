@@ -72,7 +72,7 @@ data class TechniqueDetail(
     val sessionsLast30Days: Int,
 )
 
-/** [key] is the art's [disciplineKey]; [name] is how it was first written. */
+/** [key] is the art's [disciplineKey]; [name] is how it was first written (see [Stats.artNames]). */
 data class DisciplineShare(val key: String, val name: String, val sessions: Int, val minutes: Int)
 
 data class Overview(
@@ -266,9 +266,27 @@ object Stats {
         return Streaks(current, longest)
     }
 
-    fun techniqueSummaries(techniques: List<Technique>, sessions: List<TrainingSession>): List<TechniqueSummary> {
+    /**
+     * The display name of every named martial art: how it was written in the first session
+     * logged with it. Spellings that differ only in case or spaces are one art, and every
+     * screen names it the same way.
+     */
+    fun artNames(sessions: List<TrainingSession>): Map<String, String> =
+        sessions
+            .filter { disciplineKey(it.discipline).isNotEmpty() }
+            .groupBy { disciplineKey(it.discipline) }
+            .mapValues { (_, group) ->
+                group.minWith(compareBy<TrainingSession> { it.createdAt }.thenBy { it.id }).discipline.trim()
+            }
+
+    /** [names] are the art names to show (see [artNames]); pass them when [sessions] is a subset. */
+    fun techniqueSummaries(
+        techniques: List<Technique>,
+        sessions: List<TrainingSession>,
+        names: Map<String, String> = artNames(sessions),
+    ): List<TechniqueSummary> {
         val records = practiceRecords(sessions)
-        return techniques.map { summaryOf(it, records[it.id].orEmpty()) }
+        return techniques.map { summaryOf(it, records[it.id].orEmpty(), names) }
     }
 
     fun techniqueDetail(technique: Technique, sessions: List<TrainingSession>, today: LocalDate): TechniqueDetail {
@@ -287,7 +305,7 @@ object Stats {
         }
         val since = today.minusDays(29)
         return TechniqueDetail(
-            summary = summaryOf(technique, records),
+            summary = summaryOf(technique, records, artNames(sessions)),
             history = records.reversed(),
             monthly = monthly,
             qualityTrend = records.filter { it.quality > 0 }.takeLast(TREND_POINTS),
@@ -308,9 +326,10 @@ object Stats {
         sessions: List<TrainingSession>,
         artKey: String? = null,
         limit: Int = 5,
+        names: Map<String, String> = artNames(sessions),
     ): List<TechniqueSummary> {
         val counted = if (artKey == null) sessions else sessions.filter { disciplineKey(it.discipline) == artKey }
-        return techniqueSummaries(techniques, counted)
+        return techniqueSummaries(techniques, counted, names)
             .filter { it.sessions > 0 }
             .sortedWith(
                 compareByDescending<TechniqueSummary> { it.sessions }
@@ -330,13 +349,14 @@ object Stats {
         techniqueArt: String? = null,
     ): Overview {
         val selected = inPeriod(sessions, period, today)
-        val top = topTechniques(techniques, selected, techniqueArt)
+        val names = artNames(sessions)
+        val top = topTechniques(techniques, selected, techniqueArt, names = names)
         val disciplines = selected
             .groupBy { disciplineKey(it.discipline) }
             .map { (key, group) ->
                 DisciplineShare(
                     key = key,
-                    name = group.first().discipline.trim().ifEmpty { "Unspecified" },
+                    name = names[key] ?: "Unspecified",
                     sessions = group.size,
                     minutes = group.sumOf { it.durationMinutes },
                 )
@@ -373,7 +393,7 @@ object Stats {
         return (0..intervals).map { it * step }
     }
 
-    private fun summaryOf(technique: Technique, records: List<PracticeRecord>): TechniqueSummary {
+    private fun summaryOf(technique: Technique, records: List<PracticeRecord>, names: Map<String, String>): TechniqueSummary {
         val qualities = records.map { it.quality }.filter { it > 0 }
         return TechniqueSummary(
             technique = technique,
@@ -388,7 +408,7 @@ object Stats {
                 .map { (key, group) ->
                     ArtCount(
                         key = key,
-                        name = group.minBy { it.date.toEpochDay() }.discipline.trim(),
+                        name = names[key] ?: group.first().discipline.trim(),
                         sessions = group.map { it.sessionId }.distinct().size,
                     )
                 }

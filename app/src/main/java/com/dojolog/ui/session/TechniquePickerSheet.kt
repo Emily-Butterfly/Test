@@ -42,6 +42,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import com.dojolog.domain.ArtCount
@@ -52,9 +54,9 @@ import com.dojolog.ui.theme.DojoColors
 
 /**
  * Search the technique library and add entries to the session; typing a new name offers to
- * create it. Techniques already practised in this session's martial art ([sessionArt]) come
- * first, and every technique shows the arts it was practised in. Stays open so several
- * techniques can be added in a row.
+ * create it. Techniques already practised in this session's martial art ([sessionArt]) get
+ * their own section on top, and every technique shows the arts it was practised in. Stays
+ * open so several techniques can be added in a row.
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -72,10 +74,21 @@ fun TechniquePickerSheet(
     var newCategory by rememberSaveable { mutableStateOf(TechniqueCategory.OTHER) }
     val trimmed = query.trim()
     val artKey = disciplineKey(sessionArt)
-    val matches = remember(library, arts, artKey, trimmed) {
-        val found = if (trimmed.isEmpty()) library else library.filter { it.name.contains(trimmed, ignoreCase = true) }
-        // Most practised in this art first; the rest keep the library's A–Z order.
-        found.sortedByDescending { technique -> arts[technique.id]?.firstOrNull { it.key == artKey }?.sessions ?: 0 }
+    val found = remember(library, trimmed) {
+        if (trimmed.isEmpty()) library else library.filter { it.name.contains(trimmed, ignoreCase = true) }
+    }
+    // While browsing, the techniques already practised in this art get their own section on
+    // top, most practised first; everything else stays A–Z below. Search results are A–Z.
+    val practised = remember(found, arts, artKey, trimmed) {
+        if (trimmed.isNotEmpty() || artKey.isEmpty()) {
+            emptyList()
+        } else {
+            val count = { technique: Technique -> arts[technique.id]?.firstOrNull { it.key == artKey }?.sessions ?: 0 }
+            found.filter { count(it) > 0 }.sortedByDescending(count)
+        }
+    }
+    val others = remember(found, practised) {
+        if (practised.isEmpty()) found else practised.map { it.id }.toSet().let { ids -> found.filter { it.id !in ids } }
     }
     val exactMatch = library.any { it.name.equals(trimmed, ignoreCase = true) }
 
@@ -155,26 +168,55 @@ fun TechniquePickerSheet(
                         )
                     }
                 }
-                items(matches, key = { it.id }) { technique ->
-                    val added = technique.id in alreadyAdded
-                    ListItem(
-                        headlineContent = { Text(technique.name) },
-                        supportingContent = {
-                            val practisedIn = arts[technique.id].orEmpty().joinToString(", ") { it.name }
-                            Text(
-                                if (practisedIn.isEmpty()) technique.category.label
-                                else "${technique.category.label} · $practisedIn",
-                            )
-                        },
-                        trailingContent = {
-                            if (added) Icon(Icons.Filled.Check, contentDescription = "Added", tint = DojoColors.Primary)
-                        },
-                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                        modifier = Modifier.clickable(enabled = !added) { onPick(technique) },
-                    )
+                if (practised.isNotEmpty()) {
+                    item(key = "header-art") { PickerSectionHeader("Practised in ${sessionArt.trim()} · most first") }
+                    items(practised, key = { it.id }) { technique ->
+                        PickerRow(technique, arts[technique.id].orEmpty(), artKey, technique.id in alreadyAdded, onPick)
+                    }
+                    if (others.isNotEmpty()) {
+                        item(key = "header-others") { PickerSectionHeader("Other techniques") }
+                    }
+                }
+                items(others, key = { it.id }) { technique ->
+                    PickerRow(technique, arts[technique.id].orEmpty(), artKey, technique.id in alreadyAdded, onPick)
                 }
                 item { Spacer(Modifier.height(24.dp)) }
             }
         }
     }
+}
+
+@Composable
+private fun PickerSectionHeader(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.labelMedium,
+        color = DojoColors.TextMuted,
+        modifier = Modifier
+            .padding(top = 8.dp, bottom = 4.dp)
+            .semantics { heading() },
+    )
+}
+
+/** The session's own art is named first, then the others by how often it was practised there. */
+@Composable
+private fun PickerRow(
+    technique: Technique,
+    arts: List<ArtCount>,
+    sessionArtKey: String,
+    added: Boolean,
+    onPick: (Technique) -> Unit,
+) {
+    ListItem(
+        headlineContent = { Text(technique.name) },
+        supportingContent = {
+            val practisedIn = arts.sortedByDescending { it.key == sessionArtKey }.joinToString(", ") { it.name }
+            Text(if (practisedIn.isEmpty()) technique.category.label else "${technique.category.label} · $practisedIn")
+        },
+        trailingContent = {
+            if (added) Icon(Icons.Filled.Check, contentDescription = "Added", tint = DojoColors.Primary)
+        },
+        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+        modifier = Modifier.clickable(enabled = !added) { onPick(technique) },
+    )
 }

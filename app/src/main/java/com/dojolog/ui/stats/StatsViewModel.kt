@@ -44,10 +44,14 @@ class StatsViewModel(repository: TrainingRepository) : ViewModel() {
         period,
         techniqueArt,
     ) { sessions, techniques, period, techniqueArt ->
-        // An art not trained in this period falls back to all arts; the choice is kept for
-        // when a period that has it is picked again.
-        val artsInPeriod = Stats.inPeriod(sessions, period, today).map { disciplineKey(it.discipline) }.toSet()
-        val art = techniqueArt?.takeIf { it in artsInPeriod }
+        // The filter only applies while its chips are shown: two or more named arts in the
+        // period, the chosen one among them. Otherwise it falls back to all arts, and the
+        // choice is kept for when such a period is picked again.
+        val namedArts = Stats.inPeriod(sessions, period, today)
+            .map { disciplineKey(it.discipline) }
+            .filter { it.isNotEmpty() }
+            .toSet()
+        val art = techniqueArt?.takeIf { namedArts.size > 1 && it in namedArts }
         StatsUiState(
             loading = false,
             period = period,

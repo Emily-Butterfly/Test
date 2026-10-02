@@ -105,13 +105,9 @@ class CalendarViewModel(repository: TrainingRepository) : ViewModel() {
         all: List<TrainingSession>,
         slots: Map<String, Int>,
     ): List<LegendEntry> {
-        val keys = shown.map { disciplineKey(it.discipline) }.toSet()
-        return all
-            .filter { disciplineKey(it.discipline) in keys }
-            .groupBy { disciplineKey(it.discipline) }
-            .map { (key, group) ->
-                LegendEntry(key, group.minBy { it.createdAt }.discipline.trim().ifEmpty { "Unspecified" })
-            }
+        val names = Stats.artNames(all)
+        return shown.map { disciplineKey(it.discipline) }.distinct()
+            .map { key -> LegendEntry(key, names[key] ?: "Unspecified") }
             .sortedWith(compareBy<LegendEntry> { slots[it.key] ?: Int.MAX_VALUE }.thenBy { it.key })
     }
 
