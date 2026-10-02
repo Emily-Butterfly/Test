@@ -74,6 +74,8 @@ import kotlin.math.floor
 internal fun YearOverviewCard(
     overview: YearOverview,
     art: String?,
+    /** The art with the most sessions overall, for the rating key when no day is picked. */
+    mainArt: String?,
     firstDayOfWeek: DayOfWeek,
     today: LocalDate,
     onArt: (String?) -> Unit,
@@ -119,7 +121,8 @@ internal fun YearOverviewCard(
             entries = overview.arts.map { LegendEntry(it.key, it.name) },
             focus = pickedDate?.let { overview.days[it] }?.marks.orEmpty(),
             showArts = overview.arts.size < 2,
-            scaleKey = art,
+            // The filtered art, else the main art if trained this year, else this year's top art.
+            scaleKey = art ?: mainArt?.takeIf { key -> overview.arts.any { it.key == key } },
         )
     }
 }

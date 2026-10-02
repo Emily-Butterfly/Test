@@ -151,7 +151,11 @@ fun CalendarScreen(
                     )
                     Spacer(Modifier.height(12.dp))
                     // The rating scale takes the colour of the selected day's art(s).
-                    CalendarLegend(state.legend, focus = state.days[state.selected]?.marks.orEmpty())
+                    CalendarLegend(
+                        entries = state.legend,
+                        focus = state.days[state.selected]?.marks.orEmpty(),
+                        scaleKey = state.mainArt,
+                    )
                 }
             }
             item(key = "summary") {
@@ -208,6 +212,7 @@ fun CalendarScreen(
                 YearOverviewCard(
                     overview = state.year,
                     art = state.yearArt,
+                    mainArt = state.mainArt,
                     firstDayOfWeek = state.firstDayOfWeek,
                     today = state.today,
                     onArt = viewModel::setYearArt,
@@ -453,7 +458,8 @@ private val LEVEL_LABELS = listOf("1 to 4", "5 to 6", "7 to 8", "9 to 10")
  * Which colour is which art (left out with [showArts] false, e.g. when filter chips already
  * say it), and how brightness maps to rating. The rating scale is drawn in the colour of
  * each art in [focus], the selected day's, with that day's step ringed; on a day without
- * training it uses [scaleKey], or else the first art in [entries].
+ * training it uses [scaleKey] (the art with the most sessions), or else the first art in
+ * [entries].
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -463,7 +469,7 @@ internal fun CalendarLegend(
     showArts: Boolean = true,
     scaleKey: String? = null,
 ) {
-    if (entries.isEmpty() && focus.isEmpty()) {
+    if (entries.isEmpty() && focus.isEmpty() && scaleKey == null) {
         Text(
             "Each martial art gets its own colour; brighter means a better rating.",
             style = MaterialTheme.typography.labelSmall,
@@ -475,7 +481,7 @@ internal fun CalendarLegend(
     val names = entries.associate { it.key to it.name }
     val scales: List<DayMark?> = focus.ifEmpty { listOf(null) }
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        if (showArts) {
+        if (showArts && entries.isNotEmpty()) {
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -484,7 +490,7 @@ internal fun CalendarLegend(
             }
         }
         scales.forEach { mark ->
-            val key = mark?.disciplineKey ?: scaleKey ?: entries.first().key
+            val key = mark?.disciplineKey ?: scaleKey ?: entries.firstOrNull()?.key.orEmpty()
             val scale = colors.rampForKey(key)
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),

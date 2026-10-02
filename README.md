@@ -14,7 +14,8 @@ log stays in a local database on your phone.
   last rows include days of the previous and next month (drawn as smaller tiles); tap one
   to jump to that month. Use the arrows to change month, or tap the month's name to pick any
   month (each shows its training days). The rating key below the grid is drawn in the
-  colour of the selected day's art, with that day's rating marked. Tap a day to see or add
+  colour of the selected day's art, with that day's rating marked; on a day without
+  training it takes the colour of the art you have logged most. Tap a day to see or add
   its sessions. Monthly totals and your weekly training streak sit under the calendar.
 - **Year overview**: a GitHub-style grid of the whole year under the calendar, one square
   per day in the art's colour and brighter for better ratings. Filter it by art, tap a day

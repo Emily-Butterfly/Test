@@ -482,6 +482,21 @@ object Stats {
         )
     }
 
+    /**
+     * The martial art logged in the most sessions, ignoring unnamed sessions; on a tie, the
+     * one logged first. Null when no session names an art.
+     */
+    fun mainArt(sessions: List<TrainingSession>): String? =
+        sessions
+            .filter { disciplineKey(it.discipline).isNotEmpty() }
+            .groupBy { disciplineKey(it.discipline) }
+            .maxWithOrNull(
+                compareBy<Map.Entry<String, List<TrainingSession>>> { it.value.size }
+                    .thenByDescending { group -> group.value.minOf { it.createdAt } }
+                    .thenByDescending { it.key },
+            )
+            ?.key
+
     /** Training days per month, for every month with training. */
     fun trainingDaysByMonth(sessions: List<TrainingSession>): Map<YearMonth, Int> =
         sessions.map { it.date }.distinct().groupingBy { YearMonth.from(it) }.eachCount()

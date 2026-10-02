@@ -55,6 +55,8 @@ data class CalendarUiState(
     val yearArt: String? = null,
     /** Training days of every month with training, for the month picker. */
     val monthDays: Map<YearMonth, Int> = emptyMap(),
+    /** The art with the most sessions: the rating key's colour on a day without training. */
+    val mainArt: String? = null,
     val loading: Boolean = true,
 )
 
@@ -114,6 +116,7 @@ class CalendarViewModel(repository: TrainingRepository) : ViewModel() {
                 year = year,
                 yearArt = yearArt,
                 monthDays = Stats.trainingDaysByMonth(sessions),
+                mainArt = Stats.mainArt(sessions),
                 loading = false,
             )
         }

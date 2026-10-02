@@ -480,4 +480,22 @@ class StatsTest {
         // The summary always covers every art.
         assertEquals(all.summary, limited.summary)
     }
+
+    @Test
+    fun mainArtIsTheOneWithTheMostSessions() {
+        val sessions = listOf(
+            session(1, today, discipline = "Judo", createdAt = 1),
+            session(2, today, discipline = "BJJ", createdAt = 2),
+            session(3, today, discipline = "bjj ", createdAt = 3),
+            session(4, today, discipline = "", createdAt = 4),
+            session(5, today, discipline = "", createdAt = 5),
+            session(6, today, discipline = "", createdAt = 6),
+        )
+        // Unnamed sessions don't count, however many there are.
+        assertEquals("bjj", Stats.mainArt(sessions))
+        // On a tie, the art logged first wins.
+        assertEquals("judo", Stats.mainArt(sessions.take(2)))
+        assertNull(Stats.mainArt(sessions.drop(3)))
+        assertNull(Stats.mainArt(emptyList()))
+    }
 }
