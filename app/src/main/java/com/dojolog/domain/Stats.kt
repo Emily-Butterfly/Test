@@ -114,14 +114,31 @@ object Stats {
      * Colour slot of every named martial art, in the order each was first logged, so an art
      * keeps its colour while others are added later. Unnamed sessions get no slot.
      */
-    fun disciplineSlots(sessions: List<TrainingSession>): Map<String, Int> =
-        sessions
+    fun disciplineSlots(sessions: List<TrainingSession>): Map<String, Int> = reconcileSlots(emptyMap(), sessions)
+
+    /**
+     * Updates the [stored] colour slots for the current [sessions]: every art that is still
+     * logged keeps its slot, arts with no sessions left give theirs up, and new arts take the
+     * lowest free slots in the order they were first logged. Unnamed sessions get no slot.
+     */
+    fun reconcileSlots(stored: Map<String, Int>, sessions: List<TrainingSession>): Map<String, Int> {
+        val firstLogged = sessions
             .filter { disciplineKey(it.discipline).isNotEmpty() }
             .groupBy { disciplineKey(it.discipline) }
-            .map { (key, group) -> key to group.minOf { it.createdAt } }
-            .sortedWith(compareBy<Pair<String, Long>> { it.second }.thenBy { it.first })
-            .mapIndexed { slot, (key, _) -> key to slot }
-            .toMap()
+            .mapValues { (_, group) -> group.minOf { it.createdAt } }
+        val slots = stored.filterKeys { it in firstLogged }.toMutableMap()
+        val taken = slots.values.toMutableSet()
+        var next = 0
+        firstLogged.entries
+            .filter { it.key !in slots }
+            .sortedWith(compareBy<Map.Entry<String, Long>> { it.value }.thenBy { it.key })
+            .forEach { (key, _) ->
+                while (next in taken) next++
+                slots[key] = next
+                taken += next
+            }
+        return slots
+    }
 
     /**
      * The martial arts trained on one day, each at the colour step of its best rating that

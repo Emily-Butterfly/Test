@@ -52,6 +52,7 @@ import com.dojolog.ui.components.ScoreBadge
 import com.dojolog.ui.components.SectionCard
 import com.dojolog.ui.components.StarRating
 import com.dojolog.ui.theme.DojoColors
+import com.dojolog.ui.theme.LocalDisciplineColors
 import java.time.LocalDate
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -183,12 +184,14 @@ private fun SessionDetailContent(
                     else -> "Overall was set by hand"
                 },
             ) {
+                val artColor = LocalDisciplineColors.current.ramp(session.discipline).identity
                 RatingCategory.entries.forEach { category ->
                     val score = session.ratings[category]
                     MeterRow(
                         label = category.label,
                         fraction = score / MAX_SCORE.toFloat(),
                         valueText = if (score > 0) "$score" else "–",
+                        color = artColor,
                     )
                 }
             }

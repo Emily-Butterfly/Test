@@ -33,8 +33,9 @@ object DojoColors {
 
     val Error = Color(0xFFFF8A80)
 
-    // Charts: a single validated accent series on the dark card surface, recessive chrome.
-    val ChartSeries = Color(0xFFE8524C)
+    // Charts: hue means a martial art, so charts across all arts use a light neutral (11.8:1
+    // on the card), clearly apart from the grey of unnamed arts. Recessive chrome.
+    val ChartSeries = Color(0xFFD5D8DF)
     val Grid = Color(0xFF262A32)
     val Baseline = Color(0xFF3A3F4B)
 }

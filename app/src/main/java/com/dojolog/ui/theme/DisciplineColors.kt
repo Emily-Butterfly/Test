@@ -51,19 +51,25 @@ object DisciplinePalette {
     fun ramp(slot: Int?): Ramp = if (slot != null && slot in ramps.indices) ramps[slot] else other
 }
 
-/** Looks up the colour ramp of a martial art by name. */
+/**
+ * Looks up the colour ramp of a martial art by name. [slots] is null until loaded; until then
+ * every art is drawn in the neutral ramp rather than a colour it may not keep.
+ */
 @Immutable
-class DisciplineColors(private val slots: Map<String, Int>) {
-    fun rampForKey(key: String): Ramp = DisciplinePalette.ramp(slots[key])
+class DisciplineColors(private val slots: Map<String, Int>?) {
+    /** The slot a new art will get once saved: the lowest one not taken. */
+    private val nextFree: Int = slots.orEmpty().values.toSet().let { taken -> (0..taken.size).first { it !in taken } }
+
+    fun rampForKey(key: String): Ramp = DisciplinePalette.ramp(slots?.get(key))
 
     /**
      * A known art gets its own colour. A new name (e.g. being typed into the editor) previews
-     * the colour it will get once saved: the next free slot.
+     * the colour it will get once saved.
      */
     fun ramp(discipline: String): Ramp {
         val key = disciplineKey(discipline)
-        if (key.isEmpty()) return DisciplinePalette.other
-        return DisciplinePalette.ramp(slots[key] ?: slots.size)
+        if (slots == null || key.isEmpty()) return DisciplinePalette.other
+        return DisciplinePalette.ramp(slots[key] ?: nextFree)
     }
 
     /** Fill for a session score, or null when unrated. */
@@ -73,4 +79,4 @@ class DisciplineColors(private val slots: Map<String, Int>) {
     }
 }
 
-val LocalDisciplineColors = compositionLocalOf { DisciplineColors(emptyMap()) }
+val LocalDisciplineColors = compositionLocalOf { DisciplineColors(null) }

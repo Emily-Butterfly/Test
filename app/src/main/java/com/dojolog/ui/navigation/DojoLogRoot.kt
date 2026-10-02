@@ -67,8 +67,7 @@ private enum class TopLevel(val route: String, val label: String, val icon: Imag
 @Composable
 fun DojoLogRoot(repository: TrainingRepository) {
     // Every screen colours martial arts the same way, so the assignment is provided once here.
-    val slotsFlow = remember(repository) { repository.observeDisciplineSlots() }
-    val slots by slotsFlow.collectAsStateWithLifecycle(initialValue = emptyMap())
+    val slots by repository.disciplineSlots.collectAsStateWithLifecycle()
     val disciplineColors = remember(slots) { DisciplineColors(slots) }
     CompositionLocalProvider(LocalDisciplineColors provides disciplineColors) {
         DojoLogScaffold()

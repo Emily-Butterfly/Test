@@ -12,14 +12,21 @@ import com.dojolog.domain.Technique
 import com.dojolog.domain.TechniqueCategory
 import com.dojolog.domain.TechniqueEntry
 import com.dojolog.domain.TrainingSession
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 
 /** Single source of truth for the app; everything is stored in the local Room database. */
-class TrainingRepository(private val db: AppDatabase) {
+class TrainingRepository(private val db: AppDatabase, private val slotStore: DisciplineSlotStore) {
     private val sessionDao = db.sessionDao()
     private val techniqueDao = db.techniqueDao()
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     /** All sessions, newest first. */
     fun observeSessions(): Flow<List<TrainingSession>> =
@@ -32,9 +39,18 @@ class TrainingRepository(private val db: AppDatabase) {
 
     fun observeRecentDisciplines(): Flow<List<String>> = sessionDao.observeRecentDisciplines()
 
-    /** Colour slot per martial art; see [Stats.disciplineSlots]. */
-    fun observeDisciplineSlots(): Flow<Map<String, Int>> =
-        observeSessions().map { Stats.disciplineSlots(it) }.distinctUntilChanged()
+    /**
+     * Colour slot per martial art, kept in [slotStore] and updated as sessions change (see
+     * [Stats.reconcileSlots]); null until first loaded. It outlives the screens, so a screen
+     * recreated on rotation gets the colours at once. One collector updates the store.
+     */
+    val disciplineSlots: StateFlow<Map<String, Int>?> = observeSessions()
+        .map { sessions ->
+            val stored = slotStore.read()
+            Stats.reconcileSlots(stored, sessions).also { if (it != stored) slotStore.write(it) }
+        }
+        .distinctUntilChanged()
+        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), null)
 
     fun observeTechniques(): Flow<List<Technique>> =
         techniqueDao.observeAll().map { rows -> rows.map { it.toDomain() } }

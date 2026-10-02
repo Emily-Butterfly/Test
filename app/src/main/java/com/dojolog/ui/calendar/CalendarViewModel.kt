@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -57,9 +58,13 @@ class CalendarViewModel(repository: TrainingRepository) : ViewModel() {
     private val selected = MutableStateFlow(today)
 
     val state: StateFlow<CalendarUiState> =
-        combine(repository.observeSessions(), month, selected) { sessions, month, selected ->
+        combine(
+            repository.observeSessions(),
+            repository.disciplineSlots.filterNotNull(),
+            month,
+            selected,
+        ) { sessions, slots, month, selected ->
             val inMonth = sessions.filter { YearMonth.from(it.date) == month }
-            val slots = Stats.disciplineSlots(sessions)
             val gridStart = Stats.calendarGridStart(month, weekStart)
             val gridEnd = Stats.calendarGridEnd(month, weekStart)
             val shown = sessions.filter { !it.date.isBefore(gridStart) && !it.date.isAfter(gridEnd) }

@@ -242,6 +242,40 @@ class StatsTest {
     }
 
     @Test
+    fun deletingAnArtsFirstSessionKeepsEveryColour() {
+        val judo1 = session(1, today, discipline = "Judo", createdAt = 1)
+        val bjj = session(2, today, discipline = "BJJ", createdAt = 2)
+        val judo3 = session(3, today, discipline = "Judo", createdAt = 3)
+        val stored = Stats.reconcileSlots(emptyMap(), listOf(judo1, bjj, judo3))
+        assertEquals(mapOf("judo" to 0, "bjj" to 1), stored)
+        // Recomputing from scratch would now put BJJ first; the stored slots must win.
+        assertEquals(stored, Stats.reconcileSlots(stored, listOf(bjj, judo3)))
+    }
+
+    @Test
+    fun removedArtsFreeTheirSlotForTheNextNewArt() {
+        val stored = mapOf("bjj" to 0, "boxing" to 1, "judo" to 2)
+        val sessions = listOf(
+            session(1, today, discipline = "BJJ", createdAt = 1),
+            session(3, today, discipline = "Judo", createdAt = 3),
+            session(4, today, discipline = "Karate", createdAt = 4),
+            session(5, today, discipline = "Aikido", createdAt = 5),
+        )
+        // Boxing was renamed away: its slot goes to the earliest new art, the next one queues after.
+        assertEquals(
+            mapOf("bjj" to 0, "judo" to 2, "karate" to 1, "aikido" to 3),
+            Stats.reconcileSlots(stored, sessions),
+        )
+    }
+
+    @Test
+    fun renamingIntoAnExistingArtKeepsThatArtsColour() {
+        val stored = mapOf("bjj" to 0, "judo" to 1)
+        val renamed = listOf(session(1, today, discipline = "Judo", createdAt = 1), session(2, today, discipline = "judo ", createdAt = 2))
+        assertEquals(mapOf("judo" to 1), Stats.reconcileSlots(stored, renamed))
+    }
+
+    @Test
     fun dayMarksUseTheBestRatingPerDisciplineInSlotOrder() {
         val slots = mapOf("bjj" to 0, "judo" to 1, "muay thai" to 2, "boxing" to 3)
         val day = listOf(

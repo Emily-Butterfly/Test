@@ -44,7 +44,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.input.pointer.pointerInput
@@ -316,7 +315,7 @@ private fun DayCell(
     }
     // Stripes and hatching mix light and dark under the number, so give it a halo.
     val textStyle = if (marks.isNotEmpty() && !solidFill) {
-        MaterialTheme.typography.bodyMedium.copy(shadow = Shadow(Color.Black.copy(alpha = 0.85f), blurRadius = 6f))
+        MaterialTheme.typography.bodyMedium.copy(shadow = Shadow(Halo, blurRadius = 6f))
     } else {
         MaterialTheme.typography.bodyMedium
     }
@@ -337,7 +336,6 @@ private fun DayCell(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .alpha(if (otherMonth != null) 0.45f else 1f)
             .clip(shape)
             .then(
                 when {
@@ -354,8 +352,15 @@ private fun DayCell(
         contentAlignment = Alignment.Center,
     ) {
         if (marks.isNotEmpty()) {
-            // One stripe per martial art, separated by a thin gap of the card surface.
-            Row(Modifier.matchParentSize(), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+            // One stripe per martial art, separated by a thin gap of the card surface. Days of
+            // the neighbouring months get a smaller tile, never a dimmer one: brightness is
+            // the rating.
+            Row(
+                Modifier
+                    .matchParentSize()
+                    .then(if (otherMonth != null) Modifier.padding(5.dp).clip(RoundedCornerShape(8.dp)) else Modifier),
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
                 marks.forEach { mark ->
                     val ramp = colors.rampForKey(mark.disciplineKey)
                     Box(
@@ -373,29 +378,35 @@ private fun DayCell(
         Text(
             text = date.dayOfMonth.toString(),
             style = textStyle,
-            fontWeight = if (info != null || isToday) FontWeight.Bold else FontWeight.Normal,
+            fontWeight = if ((info != null || isToday) && otherMonth == null) FontWeight.Bold else FontWeight.Normal,
             color = textColor,
         )
         if (info != null && info.sessions > marks.size) {
-            // More sessions than stripes: show the count as dots.
+            // More sessions than stripes: show the count as dots, ringed like the number's
+            // halo where they sit on stripes or hatching.
+            val halo = !solidFill
             Row(
                 Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = 4.dp),
+                    .padding(bottom = if (otherMonth != null) 6.dp else 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(2.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 repeat(min(info.sessions, 3)) {
                     Box(
                         Modifier
-                            .size(4.dp)
-                            .clip(CircleShape)
-                            .background(textColor),
+                            .size(if (halo) 6.dp else 4.dp)
+                            .then(if (halo) Modifier.background(Halo, CircleShape).padding(1.dp) else Modifier)
+                            .background(textColor, CircleShape),
                     )
                 }
             }
         }
     }
 }
+
+/** Dark edge that keeps light marks readable over stripes and hatching. */
+private val Halo = Color.Black.copy(alpha = 0.85f)
 
 private val LEVEL_LABELS = listOf("1 to 4", "5 to 6", "7 to 8", "9 to 10")
 
