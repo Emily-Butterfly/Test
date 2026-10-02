@@ -42,12 +42,15 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dojolog.domain.MAX_SCORE
+import com.dojolog.domain.Matchup
+import com.dojolog.domain.OpponentStats
 import com.dojolog.domain.RatingCategory
 import com.dojolog.domain.TechniqueEntry
 import com.dojolog.domain.TrainingSession
 import com.dojolog.ui.Fmt
 import com.dojolog.ui.components.EmptyState
 import com.dojolog.ui.components.MeterRow
+import com.dojolog.ui.components.ResultBadge
 import com.dojolog.ui.components.ScoreBadge
 import com.dojolog.ui.components.SectionCard
 import com.dojolog.ui.components.StarRating
@@ -61,6 +64,7 @@ fun SessionDetailScreen(
     onBack: () -> Unit,
     onEdit: (Long) -> Unit,
     onOpenTechnique: (Long) -> Unit,
+    onOpenOpponent: (Long) -> Unit,
     viewModel: SessionDetailViewModel = viewModel(factory = SessionDetailViewModel.Factory),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -106,6 +110,7 @@ fun SessionDetailScreen(
                 session = session,
                 today = state.today,
                 onOpenTechnique = onOpenTechnique,
+                onOpenOpponent = onOpenOpponent,
                 contentPadding = padding,
             )
         }
@@ -115,7 +120,7 @@ fun SessionDetailScreen(
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
             title = { Text("Delete this session?") },
-            text = { Text("The session, its ratings and its technique log will be removed. This can't be undone.") },
+            text = { Text("The session, its ratings, techniques and matchups will be removed. This can't be undone.") },
             confirmButton = {
                 TextButton(onClick = {
                     confirmDelete = false
@@ -134,6 +139,7 @@ private fun SessionDetailContent(
     session: TrainingSession,
     today: LocalDate,
     onOpenTechnique: (Long) -> Unit,
+    onOpenOpponent: (Long) -> Unit,
     contentPadding: PaddingValues,
 ) {
     LazyColumn(
@@ -196,6 +202,17 @@ private fun SessionDetailContent(
                 }
             }
         }
+        if (session.matchups.isNotEmpty()) {
+            item {
+                val record = OpponentStats.record(listOf(session))
+                SectionCard(title = "Opponents", subtitle = Fmt.record(record)) {
+                    session.matchups.forEachIndexed { index, matchup ->
+                        if (index > 0) HorizontalDivider(color = DojoColors.OutlineVariant)
+                        MatchupRow(matchup, onClick = { onOpenOpponent(matchup.opponentId) })
+                    }
+                }
+            }
+        }
         item {
             SectionCard(title = "Techniques", subtitle = Fmt.count(session.techniques.size, "technique")) {
                 if (session.techniques.isEmpty()) {
@@ -244,5 +261,29 @@ private fun TechniqueEntryRow(entry: TechniqueEntry, onClick: () -> Unit) {
         if (entry.quality > 0) {
             StarRating(entry.quality, starSize = 16.dp)
         }
+    }
+}
+
+@Composable
+private fun MatchupRow(matchup: Matchup, onClick: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clickable(onClickLabel = "Open ${matchup.opponentName}", onClick = onClick)
+            .padding(vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(matchup.opponentName, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
+            val details = listOfNotNull(
+                matchup.result.label,
+                matchup.rating.takeIf { it > 0 }?.let { "rated $it / $MAX_SCORE" },
+            ).joinToString(" · ")
+            Text(details, style = MaterialTheme.typography.bodySmall, color = DojoColors.TextSecondary)
+            if (matchup.notes.isNotBlank()) {
+                Text(matchup.notes, style = MaterialTheme.typography.bodySmall, color = DojoColors.TextMuted)
+            }
+        }
+        ResultBadge(matchup.result)
     }
 }

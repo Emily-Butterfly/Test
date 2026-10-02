@@ -13,8 +13,8 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -57,6 +57,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dojolog.domain.MAX_SCORE
 import com.dojolog.ui.Fmt
+import com.dojolog.ui.components.BackupMenu
 import com.dojolog.ui.components.LegendSwatch
 import com.dojolog.ui.components.SectionCard
 import com.dojolog.ui.components.SessionCard
@@ -68,17 +69,18 @@ import com.dojolog.ui.theme.LocalDisciplineColors
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
+import java.time.format.TextStyle as JavaTextStyle
 import java.time.temporal.ChronoUnit
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.min
-import java.time.format.TextStyle as JavaTextStyle
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CalendarScreen(
     onOpenSession: (Long) -> Unit,
     onAddSession: (LocalDate) -> Unit,
+    onOpenBackup: () -> Unit,
     viewModel: CalendarViewModel = viewModel(factory = CalendarViewModel.Factory),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -91,6 +93,7 @@ fun CalendarScreen(
                     IconButton(onClick = viewModel::goToToday) {
                         Icon(Icons.Outlined.Today, contentDescription = "Jump to today")
                     }
+                    BackupMenu(onOpenBackup)
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
             )

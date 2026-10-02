@@ -14,8 +14,12 @@ log stays in a local database on your phone.
   last rows include days of the previous and next month (drawn as smaller tiles); tap one
   to jump to that month. Swipe or use the arrows to change month, and tap a day to see or
   add its sessions. Monthly totals and your weekly training streak sit under the calendar.
-- **Session log**: date, duration, martial art (it remembers the ones you use), session type
-  (class, open mat, sparring, private, solo, competition) and notes.
+- **Session log**: date, duration (quick picks from 45 minutes to 2 hours), martial art (it
+  remembers the ones you use), session type (class, open mat, sparring, private, solo,
+  competition) and notes.
+- **Opponents**: sparring and competition sessions list who you faced. Each matchup gets a
+  result (win, loss, draw or none), a 1–10 rating of how it went and a comment, and the same
+  person can be added for several rounds.
 - **Techniques per session**: pick techniques from your library or create them as you go.
   For each one you can log reps, a 1–5 star execution-quality rating and a note.
 - **Session rating**: five categories (Technique, Conditioning, Sparring, Focus, Effort),
@@ -25,8 +29,16 @@ log stays in a local database on your phone.
   practised, practice frequency per month, a quality trend chart and the full history.
   The library can be searched, filtered by category and sorted.
 - **Overall stats**: totals for 30 days, 90 days, 12 months or all time, an activity chart,
-  the trend of your overall rating, average score per category, most practised techniques
-  and time per martial art.
+  the trend of your overall rating, average score per category, your sparring and
+  competition record, most practised techniques (all arts or one) and time per martial art.
+- **Record by opponent** (Stats → *Record by opponent*): everyone you have faced, with
+  wins–losses–draws, win rate, average rating and when you last met, filterable by art. Each
+  person has a page with their club, grade, weight and your notes on them, a rating trend
+  and every matchup.
+- **Export & import** (the ⋮ menu on Calendar or Stats): saves everything to one JSON file
+  you keep wherever you like, and reads it back, for example after reinstalling the app or on
+  a new phone. An import adds what the app doesn't have yet and skips sessions it already
+  has, so importing the same file twice is safe; it can also replace all data instead.
 
 ## Getting the app
 
@@ -45,7 +57,8 @@ from that source.
 > app when both are signed with the same key. Without the setup below, each CI build is
 > signed with a throwaway key, so installing a newer build means uninstalling the old one
 > first, **which deletes your training log**. Set up a release key once (below) before you
-> start logging for real.
+> start logging for real. Until then, use *Export & import* to save your data to a file
+> before uninstalling, and import it into the new install.
 
 ### Stable signing key (recommended)
 
@@ -86,11 +99,14 @@ Android 8.0 (API 26) or newer.
 ```
 app/src/main/java/com/dojolog/
 ├── domain/        Models and Stats: pure Kotlin with no Android code, unit tested
-├── data/          Room entities, DAOs, database and TrainingRepository
+├── data/          Room entities, DAOs, database (with migrations) and TrainingRepository
+│   └── backup/    Export file format and import planning: pure Kotlin, unit tested
 └── ui/
     ├── calendar/  Calendar screen (start screen)
-    ├── session/   Session detail, session editor and technique picker
+    ├── session/   Session detail, session editor, technique and opponent pickers
     ├── techniques/ Technique library and per-technique stats
+    ├── opponents/ Record by opponent and per-person pages
+    ├── backup/    Export & import screen
     ├── stats/     Overall stats
     ├── components/ Cards, stat tiles, star rating, bar and line charts
     ├── navigation/ Bottom navigation and routes

@@ -2,6 +2,8 @@ package com.dojolog.ui
 
 import com.dojolog.domain.ActivityBucket
 import com.dojolog.domain.BucketSize
+import com.dojolog.domain.MatchRecord
+import com.dojolog.domain.MatchResult
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
@@ -62,6 +64,35 @@ object Fmt {
             days < 60 -> "$days days ago"
             else -> mediumDate(date)
         }
+    }
+
+    /** A record in a few characters: "3W 1L 0D", plus rounds without a result: "· 2 unscored". */
+    fun record(record: MatchRecord): String {
+        val parts = mutableListOf<String>()
+        if (record.scored > 0) parts += "${record.wins}W ${record.losses}L ${record.draws}D"
+        if (record.unscored > 0) parts += "${record.unscored} unscored"
+        return parts.joinToString(" · ").ifEmpty { "No matchups" }
+    }
+
+    /** The same record in words, for screen readers: "3 wins, 1 loss, no draws". */
+    fun recordSpoken(record: MatchRecord): String {
+        if (record.matchups == 0) return "No matchups"
+        val parts = mutableListOf<String>()
+        if (record.scored > 0) {
+            parts += count(record.wins, "win")
+            parts += count(record.losses, "loss", "losses")
+            parts += count(record.draws, "draw")
+        }
+        if (record.unscored > 0) parts += count(record.unscored, "unscored round")
+        return parts.joinToString(", ")
+    }
+
+    /** One letter for a result, as used in records: W, L, D, or a dash when unscored. */
+    fun resultLetter(result: MatchResult): String = when (result) {
+        MatchResult.WIN -> "W"
+        MatchResult.LOSS -> "L"
+        MatchResult.DRAW -> "D"
+        MatchResult.NONE -> "–"
     }
 
     /** Short x-axis label for an activity bucket. */

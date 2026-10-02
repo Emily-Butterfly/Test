@@ -8,6 +8,9 @@ const val MAX_SCORE = 10
 /** Highest per-technique execution quality. */
 const val MAX_QUALITY = 5
 
+/** Longest session that can be logged. */
+const val MAX_DURATION_MINUTES = 24 * 60
+
 enum class SessionType(val key: String, val label: String) {
     CLASS("class", "Class"),
     OPEN_MAT("open_mat", "Open mat"),
@@ -98,6 +101,42 @@ data class TechniqueEntry(
     val notes: String = "",
 )
 
+/** Outcome of one matchup; [NONE] for rounds that weren't scored. */
+enum class MatchResult(val key: String, val label: String) {
+    WIN("win", "Win"),
+    LOSS("loss", "Loss"),
+    DRAW("draw", "Draw"),
+    NONE("none", "No result");
+
+    companion object {
+        fun fromKey(key: String): MatchResult = entries.firstOrNull { it.key == key } ?: NONE
+    }
+}
+
+/** Someone you spar or compete against, with whatever you want to remember about them. */
+data class Opponent(
+    val id: Long,
+    val name: String,
+    val club: String = "",
+    /** Belt, grade or rank. */
+    val grade: String = "",
+    /** Weight or weight class. */
+    val weight: String = "",
+    val notes: String = "",
+)
+
+/**
+ * One matchup (a round, roll or fight) against an opponent. [rating] is how it went for
+ * you, 1 to [MAX_SCORE], or 0 when not rated.
+ */
+data class Matchup(
+    val opponentId: Long,
+    val opponentName: String,
+    val result: MatchResult = MatchResult.NONE,
+    val rating: Int = 0,
+    val notes: String = "",
+)
+
 data class TrainingSession(
     val id: Long = 0,
     val date: LocalDate,
@@ -111,7 +150,12 @@ data class TrainingSession(
     val overallAuto: Boolean = true,
     val ratings: Ratings = Ratings(),
     val techniques: List<TechniqueEntry> = emptyList(),
+    /** Opponents faced, in the order entered (sparring and competition). */
+    val matchups: List<Matchup> = emptyList(),
     val createdAt: Long = 0,
 ) {
     val isRated: Boolean get() = overall > 0f
 }
+
+/** Session types that are logged with opponents. */
+val SessionType.hasOpponents: Boolean get() = this == SessionType.SPARRING || this == SessionType.COMPETITION

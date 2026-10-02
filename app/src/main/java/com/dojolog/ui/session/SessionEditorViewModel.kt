@@ -11,7 +11,12 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.dojolog.data.TrainingRepository
 import com.dojolog.domain.ArtCount
+import com.dojolog.domain.MAX_DURATION_MINUTES
 import com.dojolog.domain.MAX_SCORE
+import com.dojolog.domain.Matchup
+import com.dojolog.domain.Opponent
+import com.dojolog.domain.OpponentStats
+import com.dojolog.domain.OpponentSummary
 import com.dojolog.domain.RatingCategory
 import com.dojolog.domain.Ratings
 import com.dojolog.domain.SessionType
@@ -20,6 +25,7 @@ import com.dojolog.domain.Technique
 import com.dojolog.domain.TechniqueCategory
 import com.dojolog.domain.TechniqueEntry
 import com.dojolog.domain.TrainingSession
+import com.dojolog.domain.hasOpponents
 import com.dojolog.ui.repository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
@@ -44,8 +50,12 @@ data class EditorUiState(
     val overallAuto: Boolean = true,
     val overallManual: Int = 0,
     val techniques: List<TechniqueEntry> = emptyList(),
+    val matchups: List<Matchup> = emptyList(),
     val createdAt: Long = 0,
 ) {
+    /** Sparring and competition are logged with opponents; ones already added always show. */
+    val showsOpponents: Boolean get() = type.hasOpponents || matchups.isNotEmpty()
+
     /** What will be saved as the overall score (0 = unrated). */
     val overall: Float get() = if (overallAuto) ratings.average() ?: 0f else overallManual.toFloat()
 
@@ -53,8 +63,6 @@ data class EditorUiState(
 
     val canSave: Boolean get() = loaded && durationMinutes != null
 }
-
-const val MAX_DURATION_MINUTES = 24 * 60
 
 class SessionEditorViewModel(
     private val repository: TrainingRepository,
@@ -84,6 +92,14 @@ class SessionEditorViewModel(
             .flowOn(Dispatchers.Default)
             .stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
 
+    /** Everyone you have faced or added, most recently faced first, for the opponent picker. */
+    val opponents: StateFlow<List<OpponentSummary>> =
+        combine(repository.observeOpponents(), repository.observeSessions()) { opponents, sessions ->
+            OpponentStats.summaries(opponents, sessions)
+        }
+            .flowOn(Dispatchers.Default)
+            .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
     val recentDisciplines: StateFlow<List<String>> =
         repository.observeRecentDisciplines().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
@@ -103,6 +119,7 @@ class SessionEditorViewModel(
                     overallAuto = existing.overallAuto,
                     overallManual = existing.overall.roundToInt(),
                     techniques = existing.techniques,
+                    matchups = existing.matchups,
                     createdAt = existing.createdAt,
                 )
             } else {
@@ -160,6 +177,24 @@ class SessionEditorViewModel(
         viewModelScope.launch { addTechnique(repository.createTechnique(name, category)) }
     }
 
+    /** The same person can be added more than once, e.g. for several rounds. */
+    fun addMatchup(opponent: Opponent) = edit {
+        it.copy(matchups = it.matchups + Matchup(opponent.id, opponent.name))
+    }
+
+    fun createAndAddOpponent(name: String) {
+        if (name.isBlank()) return
+        viewModelScope.launch { addMatchup(repository.createOpponent(Opponent(id = 0, name = name))) }
+    }
+
+    fun updateMatchup(index: Int, matchup: Matchup) = edit {
+        it.copy(matchups = it.matchups.toMutableList().also { list -> list[index] = matchup })
+    }
+
+    fun removeMatchup(index: Int) = edit {
+        it.copy(matchups = it.matchups.toMutableList().also { list -> list.removeAt(index) })
+    }
+
     fun updateEntry(index: Int, entry: TechniqueEntry) = edit {
         it.copy(techniques = it.techniques.toMutableList().also { list -> list[index] = entry })
     }
@@ -189,6 +224,7 @@ class SessionEditorViewModel(
                     overallAuto = current.overallAuto,
                     ratings = current.ratings,
                     techniques = current.techniques,
+                    matchups = current.matchups,
                     createdAt = current.createdAt,
                 ),
             )

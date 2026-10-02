@@ -57,12 +57,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.dojolog.domain.MAX_DURATION_MINUTES
 import com.dojolog.domain.MAX_SCORE
+import com.dojolog.domain.MatchResult
+import com.dojolog.domain.Matchup
 import com.dojolog.domain.RatingCategory
 import com.dojolog.domain.SessionType
 import com.dojolog.domain.TechniqueEntry
@@ -75,7 +80,7 @@ import com.dojolog.ui.theme.DojoColors
 import java.time.LocalDate
 import kotlin.math.roundToInt
 
-private val QUICK_DURATIONS = listOf(30 to "30m", 45 to "45m", 60 to "1h", 75 to "1h15", 90 to "1h30", 120 to "2h")
+private val QUICK_DURATIONS = listOf(45 to "45m", 60 to "1h", 75 to "1h15", 90 to "1h30", 120 to "2h")
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -87,8 +92,10 @@ fun SessionEditorScreen(
     val library by viewModel.library.collectAsStateWithLifecycle()
     val techniqueArts by viewModel.techniqueArts.collectAsStateWithLifecycle()
     val disciplines by viewModel.recentDisciplines.collectAsStateWithLifecycle()
+    val opponents by viewModel.opponents.collectAsStateWithLifecycle()
     var showDatePicker by rememberSaveable { mutableStateOf(false) }
     var showTechniquePicker by rememberSaveable { mutableStateOf(false) }
+    var showOpponentPicker by rememberSaveable { mutableStateOf(false) }
     var confirmDiscard by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(viewModel.saved) {
@@ -151,6 +158,17 @@ fun SessionEditorScreen(
                     onType = viewModel::setType,
                 )
             }
+            if (state.showsOpponents) {
+                item(key = "opponents") {
+                    MatchupsCard(
+                        matchups = state.matchups,
+                        type = state.type,
+                        onAdd = { showOpponentPicker = true },
+                        onChange = viewModel::updateMatchup,
+                        onRemove = viewModel::removeMatchup,
+                    )
+                }
+            }
             item(key = "techniques") {
                 TechniquesCard(
                     entries = state.techniques,
@@ -210,6 +228,16 @@ fun SessionEditorScreen(
             onPick = viewModel::addTechnique,
             onCreate = viewModel::createAndAddTechnique,
             onDismiss = { showTechniquePicker = false },
+        )
+    }
+
+    if (showOpponentPicker) {
+        OpponentPickerSheet(
+            opponents = opponents,
+            addedCounts = state.matchups.groupingBy { it.opponentId }.eachCount(),
+            onPick = viewModel::addMatchup,
+            onCreate = viewModel::createAndAddOpponent,
+            onDismiss = { showOpponentPicker = false },
         )
     }
 
@@ -396,6 +424,111 @@ private fun TechniqueEntryEditor(
             onValueChange = { onChange(entry.copy(notes = it)) },
             placeholder = { Text("Note (optional)") },
             maxLines = 3,
+            textStyle = MaterialTheme.typography.bodyMedium,
+            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun MatchupsCard(
+    matchups: List<Matchup>,
+    type: SessionType,
+    onAdd: () -> Unit,
+    onChange: (Int, Matchup) -> Unit,
+    onRemove: (Int) -> Unit,
+) {
+    SectionCard(
+        title = "Opponents",
+        subtitle = if (matchups.isEmpty()) null else Fmt.count(matchups.size, "matchup"),
+    ) {
+        if (matchups.isEmpty()) {
+            Text(
+                if (type == SessionType.COMPETITION) {
+                    "Add who you fought to log the result, rate each fight and build your record against them."
+                } else {
+                    "Add who you sparred with to rate each matchup, note what happened and build your record against them."
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = DojoColors.TextSecondary,
+            )
+            Spacer(Modifier.height(12.dp))
+        }
+        matchups.forEachIndexed { index, matchup ->
+            if (index > 0) HorizontalDivider(color = DojoColors.OutlineVariant)
+            // Several rounds against the same person are numbered.
+            val rounds = matchups.count { it.opponentId == matchup.opponentId }
+            val round = matchups.take(index + 1).count { it.opponentId == matchup.opponentId }
+            MatchupEditor(
+                matchup = matchup,
+                roundLabel = if (rounds > 1) "Round $round of $rounds" else null,
+                onChange = { onChange(index, it) },
+                onRemove = { onRemove(index) },
+            )
+        }
+        OutlinedButton(onClick = onAdd, modifier = Modifier.fillMaxWidth()) {
+            Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("Add opponent")
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun MatchupEditor(
+    matchup: Matchup,
+    roundLabel: String?,
+    onChange: (Matchup) -> Unit,
+    onRemove: () -> Unit,
+) {
+    Column(Modifier.padding(vertical = 10.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(matchup.opponentName, style = MaterialTheme.typography.titleSmall)
+                if (roundLabel != null) {
+                    Text(roundLabel, style = MaterialTheme.typography.bodySmall, color = DojoColors.TextMuted)
+                }
+            }
+            IconButton(onClick = onRemove) {
+                Icon(Icons.Filled.Close, contentDescription = "Remove matchup with ${matchup.opponentName}")
+            }
+        }
+        Text("Result", style = MaterialTheme.typography.labelSmall, color = DojoColors.TextMuted)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            MatchResult.entries.forEach { result ->
+                FilterChip(
+                    selected = matchup.result == result,
+                    onClick = { onChange(matchup.copy(result = result)) },
+                    label = { Text(result.label) },
+                )
+            }
+        }
+        Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Rating", style = MaterialTheme.typography.bodyLarge)
+                Text("How the matchup went for you", style = MaterialTheme.typography.bodySmall, color = DojoColors.TextMuted)
+            }
+            Text(
+                if (matchup.rating > 0) "${matchup.rating}" else "–",
+                style = MaterialTheme.typography.titleMedium,
+                color = if (matchup.rating > 0) DojoColors.TextPrimary else DojoColors.TextMuted,
+            )
+        }
+        Slider(
+            value = matchup.rating.toFloat(),
+            onValueChange = { onChange(matchup.copy(rating = it.roundToInt())) },
+            valueRange = 0f..MAX_SCORE.toFloat(),
+            steps = MAX_SCORE - 1,
+            modifier = Modifier.semantics { contentDescription = "Rating against ${matchup.opponentName}" },
+        )
+        OutlinedTextField(
+            value = matchup.notes,
+            onValueChange = { onChange(matchup.copy(notes = it)) },
+            placeholder = { Text("Comment (optional)") },
+            maxLines = 4,
             textStyle = MaterialTheme.typography.bodyMedium,
             keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
             modifier = Modifier.fillMaxWidth(),

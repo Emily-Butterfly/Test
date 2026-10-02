@@ -32,7 +32,10 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.dojolog.data.TrainingRepository
+import com.dojolog.ui.backup.BackupScreen
 import com.dojolog.ui.calendar.CalendarScreen
+import com.dojolog.ui.opponents.OpponentDetailScreen
+import com.dojolog.ui.opponents.OpponentsScreen
 import com.dojolog.ui.session.SessionDetailScreen
 import com.dojolog.ui.session.SessionEditorScreen
 import com.dojolog.ui.session.SessionEditorViewModel
@@ -50,11 +53,15 @@ private object Routes {
     const val SESSION = "session/{sessionId}"
     const val EDITOR = "editor?sessionId={sessionId}&date={date}"
     const val TECHNIQUE = "technique/{techniqueId}"
+    const val OPPONENTS = "opponents"
+    const val OPPONENT = "opponent/{opponentId}"
+    const val BACKUP = "backup"
 
     fun session(id: Long) = "session/$id"
     fun newSession(date: LocalDate) = "editor?date=${date.toEpochDay()}"
     fun editSession(id: Long) = "editor?sessionId=$id"
     fun technique(id: Long) = "technique/$id"
+    fun opponent(id: Long) = "opponent/$id"
 }
 
 private enum class TopLevel(val route: String, val label: String, val icon: ImageVector) {
@@ -111,13 +118,18 @@ private fun DojoLogScaffold() {
                 CalendarScreen(
                     onOpenSession = { navController.navigate(Routes.session(it)) },
                     onAddSession = { navController.navigate(Routes.newSession(it)) },
+                    onOpenBackup = { navController.navigate(Routes.BACKUP) },
                 )
             }
             composable(Routes.TECHNIQUES) {
                 TechniquesScreen(onOpenTechnique = { navController.navigate(Routes.technique(it)) })
             }
             composable(Routes.STATS) {
-                StatsScreen(onOpenTechnique = { navController.navigate(Routes.technique(it)) })
+                StatsScreen(
+                    onOpenTechnique = { navController.navigate(Routes.technique(it)) },
+                    onOpenOpponents = { navController.navigate(Routes.OPPONENTS) },
+                    onOpenBackup = { navController.navigate(Routes.BACKUP) },
+                )
             }
             composable(
                 Routes.SESSION,
@@ -127,6 +139,7 @@ private fun DojoLogScaffold() {
                     onBack = { navController.popFrom(entry) },
                     onEdit = { navController.navigate(Routes.editSession(it)) },
                     onOpenTechnique = { navController.navigate(Routes.technique(it)) },
+                    onOpenOpponent = { navController.navigate(Routes.opponent(it)) },
                 )
             }
             composable(
@@ -152,6 +165,24 @@ private fun DojoLogScaffold() {
                     onBack = { navController.popFrom(entry) },
                     onOpenSession = { navController.navigate(Routes.session(it)) },
                 )
+            }
+            composable(Routes.OPPONENTS) { entry ->
+                OpponentsScreen(
+                    onBack = { navController.popFrom(entry) },
+                    onOpenOpponent = { navController.navigate(Routes.opponent(it)) },
+                )
+            }
+            composable(
+                Routes.OPPONENT,
+                arguments = listOf(navArgument("opponentId") { type = NavType.LongType }),
+            ) { entry ->
+                OpponentDetailScreen(
+                    onBack = { navController.popFrom(entry) },
+                    onOpenSession = { navController.navigate(Routes.session(it)) },
+                )
+            }
+            composable(Routes.BACKUP) { entry ->
+                BackupScreen(onBack = { navController.popFrom(entry) })
             }
         }
     }

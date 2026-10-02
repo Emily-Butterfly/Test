@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.dp
 import com.dojolog.domain.ArtCount
 import com.dojolog.domain.MAX_QUALITY
 import com.dojolog.domain.MAX_SCORE
+import com.dojolog.domain.MatchResult
 import com.dojolog.domain.Stats
 import com.dojolog.ui.Fmt
 import com.dojolog.ui.theme.DojoColors
@@ -153,6 +154,41 @@ fun ScoreBadge(score: Float, discipline: String, modifier: Modifier = Modifier, 
             style = if (large) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.Bold,
             color = if (level > 0) ramp.ink(level) else DojoColors.TextMuted,
+        )
+    }
+}
+
+/**
+ * A matchup result as one letter, told apart by shape rather than hue (hue means a martial
+ * art): a win is a solid light tile, a loss and a draw are outlined, no result is a dash.
+ * Silent for screen readers, since the row it sits in says the result in words.
+ */
+@Composable
+fun ResultBadge(result: MatchResult, modifier: Modifier = Modifier) {
+    val shape = RoundedCornerShape(8.dp)
+    Box(
+        modifier = modifier
+            .size(32.dp)
+            .clip(shape)
+            .then(
+                when (result) {
+                    MatchResult.WIN -> Modifier.background(DojoColors.ChartSeries)
+                    MatchResult.NONE -> Modifier
+                    else -> Modifier.border(1.5.dp, DojoColors.TextSecondary, shape)
+                },
+            )
+            .clearAndSetSemantics { },
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            Fmt.resultLetter(result),
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+            color = when (result) {
+                MatchResult.WIN -> DojoColors.Background
+                MatchResult.NONE -> DojoColors.TextMuted
+                else -> DojoColors.TextPrimary
+            },
         )
     }
 }

@@ -65,16 +65,65 @@ data class SessionTechniqueEntity(
     val position: Int,
 )
 
+@Entity(tableName = "opponents", indices = [Index(value = ["name"], unique = true)])
+data class OpponentEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    @ColumnInfo(collate = ColumnInfo.NOCASE) val name: String,
+    val club: String,
+    val grade: String,
+    val weight: String,
+    val notes: String,
+    val createdAt: Long,
+)
+
+@Entity(
+    tableName = "session_matchups",
+    foreignKeys = [
+        ForeignKey(
+            entity = SessionEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["sessionId"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+        ForeignKey(
+            entity = OpponentEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["opponentId"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+    ],
+    indices = [Index("sessionId"), Index("opponentId")],
+)
+data class SessionMatchupEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val sessionId: Long,
+    val opponentId: Long,
+    /** [com.dojolog.domain.MatchResult.key] */
+    val result: String,
+    val rating: Int,
+    val notes: String,
+    /** Order within the session, as entered. */
+    val position: Int,
+)
+
 data class EntryWithTechnique(
     @Embedded val entry: SessionTechniqueEntity,
     @Relation(parentColumn = "techniqueId", entityColumn = "id")
     val technique: TechniqueEntity,
 )
 
+data class MatchupWithOpponent(
+    @Embedded val matchup: SessionMatchupEntity,
+    @Relation(parentColumn = "opponentId", entityColumn = "id")
+    val opponent: OpponentEntity,
+)
+
 data class SessionWithEntries(
     @Embedded val session: SessionEntity,
     @Relation(entity = SessionTechniqueEntity::class, parentColumn = "id", entityColumn = "sessionId")
     val entries: List<EntryWithTechnique>,
+    @Relation(entity = SessionMatchupEntity::class, parentColumn = "id", entityColumn = "sessionId")
+    val matchups: List<MatchupWithOpponent>,
 )
 
 class Converters {

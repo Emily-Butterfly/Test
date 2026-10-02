@@ -83,6 +83,10 @@ data class Overview(
     val ratingTrend: List<TrainingSession>,
     val topTechniques: List<TechniqueSummary>,
     val disciplines: List<DisciplineShare>,
+    /** Your record over the matchups in the period. */
+    val record: MatchRecord = MatchRecord(),
+    /** Different people faced in the period. */
+    val opponentsFaced: Int = 0,
 )
 
 /** Consecutive calendar weeks with at least one session. */
@@ -119,24 +123,36 @@ object Stats {
     /**
      * Updates the [stored] colour slots for the current [sessions]: every art that is still
      * logged keeps its slot, arts with no sessions left give theirs up, and new arts take the
-     * lowest free slots in the order they were first logged. Unnamed sessions get no slot.
+     * lowest free slots in the order they were first logged. A new art listed in [preferred]
+     * (e.g. from an imported backup) gets that slot instead when it is free. Unnamed sessions
+     * get no slot.
      */
-    fun reconcileSlots(stored: Map<String, Int>, sessions: List<TrainingSession>): Map<String, Int> {
+    fun reconcileSlots(
+        stored: Map<String, Int>,
+        sessions: List<TrainingSession>,
+        preferred: Map<String, Int> = emptyMap(),
+    ): Map<String, Int> {
         val firstLogged = sessions
             .filter { disciplineKey(it.discipline).isNotEmpty() }
             .groupBy { disciplineKey(it.discipline) }
             .mapValues { (_, group) -> group.minOf { it.createdAt } }
         val slots = stored.filterKeys { it in firstLogged }.toMutableMap()
         val taken = slots.values.toMutableSet()
-        var next = 0
-        firstLogged.entries
+        val newKeys = firstLogged.entries
             .filter { it.key !in slots }
             .sortedWith(compareBy<Map.Entry<String, Long>> { it.value }.thenBy { it.key })
-            .forEach { (key, _) ->
-                while (next in taken) next++
-                slots[key] = next
-                taken += next
-            }
+            .map { it.key }
+        for (key in newKeys) {
+            val slot = preferred[key] ?: continue
+            if (slot >= 0 && taken.add(slot)) slots[key] = slot
+        }
+        var next = 0
+        for (key in newKeys) {
+            if (key in slots) continue
+            while (next in taken) next++
+            slots[key] = next
+            taken += next
+        }
         return slots
     }
 
@@ -373,6 +389,8 @@ object Stats {
             ratingTrend = trend,
             topTechniques = top,
             disciplines = disciplines,
+            record = OpponentStats.record(selected),
+            opponentsFaced = OpponentStats.opponentsFaced(selected),
         )
     }
 

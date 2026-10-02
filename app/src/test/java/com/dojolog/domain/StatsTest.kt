@@ -269,6 +269,24 @@ class StatsTest {
     }
 
     @Test
+    fun importedArtsTakeTheirPreferredSlotWhenFree() {
+        val stored = mapOf("bjj" to 0)
+        val sessions = listOf(
+            session(1, today, discipline = "BJJ", createdAt = 1),
+            session(2, today, discipline = "Judo", createdAt = 2),
+            session(3, today, discipline = "Karate", createdAt = 3),
+            session(4, today, discipline = "Boxing", createdAt = 4),
+        )
+        // BJJ keeps its slot even though the backup had it elsewhere; Karate wanted BJJ's
+        // slot, so it gets the lowest free one after the other preferences are placed.
+        val preferred = mapOf("bjj" to 5, "judo" to 3, "karate" to 0, "boxing" to 3)
+        assertEquals(
+            mapOf("bjj" to 0, "judo" to 3, "karate" to 1, "boxing" to 2),
+            Stats.reconcileSlots(stored, sessions, preferred),
+        )
+    }
+
+    @Test
     fun renamingIntoAnExistingArtKeepsThatArtsColour() {
         val stored = mapOf("bjj" to 0, "judo" to 1)
         val renamed = listOf(session(1, today, discipline = "Judo", createdAt = 1), session(2, today, discipline = "judo ", createdAt = 2))

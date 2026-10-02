@@ -16,6 +16,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.dojolog.domain.OpponentStats
 import com.dojolog.domain.TrainingSession
 import com.dojolog.ui.Fmt
 import com.dojolog.ui.theme.DojoColors
@@ -53,6 +54,16 @@ fun SessionCard(
                     style = MaterialTheme.typography.bodyMedium,
                     color = DojoColors.TextSecondary,
                 )
+                if (session.matchups.isNotEmpty()) {
+                    val names = session.matchups.map { it.opponentName }.distinct().joinToString(", ")
+                    Text(
+                        "vs $names · ${Fmt.record(OpponentStats.record(listOf(session)))}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = DojoColors.TextSecondary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
                 if (session.techniques.isNotEmpty()) {
                     Spacer(Modifier.height(10.dp))
                     Pills(session.techniques.map { it.techniqueName })

@@ -7,20 +7,29 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.Insights
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -28,6 +37,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -38,6 +49,7 @@ import com.dojolog.domain.RatingCategory
 import com.dojolog.domain.StatsPeriod
 import com.dojolog.domain.Streaks
 import com.dojolog.ui.Fmt
+import com.dojolog.ui.components.BackupMenu
 import com.dojolog.ui.components.BarChart
 import com.dojolog.ui.components.ChartBar
 import com.dojolog.ui.components.ChartPoint
@@ -49,11 +61,14 @@ import com.dojolog.ui.components.StatTile
 import com.dojolog.ui.components.TileRow
 import com.dojolog.ui.theme.DojoColors
 import com.dojolog.ui.theme.LocalDisciplineColors
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StatsScreen(
     onOpenTechnique: (Long) -> Unit,
+    onOpenOpponents: () -> Unit,
+    onOpenBackup: () -> Unit,
     viewModel: StatsViewModel = viewModel(factory = StatsViewModel.Factory),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -62,6 +77,12 @@ fun StatsScreen(
         topBar = {
             TopAppBar(
                 title = { Text("Stats") },
+                actions = {
+                    IconButton(onClick = onOpenOpponents) {
+                        Icon(Icons.Outlined.Groups, contentDescription = "Record by opponent")
+                    }
+                    BackupMenu(onOpenBackup)
+                },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
             )
         },
@@ -73,6 +94,9 @@ fun StatsScreen(
                 title = "No stats yet",
                 message = "Log your first training session and your progress will show up here.",
                 modifier = Modifier.padding(padding),
+                action = {
+                    TextButton(onClick = onOpenBackup) { Text("Restore from a backup") }
+                },
             )
             return@Scaffold
         }
@@ -99,6 +123,7 @@ fun StatsScreen(
             }
             if (overview != null) {
                 item(key = "tiles") { SummaryTiles(overview, state.streaks) }
+                item(key = "opponents") { OpponentsCard(overview, onOpenOpponents) }
                 item(key = "activity") { ActivityCard(overview) }
                 item(key = "trend") { RatingTrendCard(overview) }
                 item(key = "breakdown") { BreakdownCard(overview) }
@@ -152,6 +177,52 @@ private fun SummaryTiles(overview: Overview, streaks: Streaks) {
                 supporting = "Best: ${Fmt.count(streaks.longestWeeks, "week")}",
                 modifier = Modifier.weight(1f),
             )
+        }
+    }
+}
+
+/** Your record in the period, and the way to the record against each opponent. */
+@Composable
+private fun OpponentsCard(overview: Overview, onOpenOpponents: () -> Unit) {
+    val record = overview.record
+    SectionCard(
+        modifier = Modifier.padding(horizontal = 16.dp),
+        title = "Sparring & competition",
+        subtitle = if (record.matchups > 0) {
+            "${Fmt.count(record.matchups, "matchup")} against ${Fmt.count(overview.opponentsFaced, "opponent")}"
+        } else {
+            null
+        },
+    ) {
+        if (record.matchups == 0) {
+            Text(
+                "Add opponents to your sparring and competition sessions to track how each matchup went.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = DojoColors.TextSecondary,
+            )
+        } else {
+            TileRow {
+                StatTile(
+                    label = "Record",
+                    value = if (record.scored > 0) "${record.wins}–${record.losses}–${record.draws}" else "–",
+                    supporting = if (record.scored > 0) "Wins–losses–draws" else "No results logged",
+                    modifier = Modifier
+                        .weight(1f)
+                        .clearAndSetSemantics { contentDescription = "Record: ${Fmt.recordSpoken(record)}" },
+                )
+                StatTile(
+                    label = "Win rate",
+                    value = record.winRate?.let { "${(it * 100).roundToInt()}%" } ?: "–",
+                    supporting = if (record.unscored > 0) "${record.unscored} without a result" else Fmt.count(record.scored, "result"),
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        OutlinedButton(onClick = onOpenOpponents, modifier = Modifier.fillMaxWidth()) {
+            Icon(Icons.Outlined.Groups, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("Record by opponent")
         }
     }
 }
