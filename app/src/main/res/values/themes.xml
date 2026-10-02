@@ -1,0 +1,9 @@
+<resources>
+    <!-- The app is dark-only; Compose draws everything, this just avoids a white flash on launch. -->
+    <style name="Theme.DojoLog" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/dojo_background</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>
