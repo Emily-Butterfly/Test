@@ -10,6 +10,7 @@ import com.dojolog.domain.PeriodSummary
 import com.dojolog.domain.Stats
 import com.dojolog.domain.Streaks
 import com.dojolog.domain.TrainingSession
+import com.dojolog.domain.YearOverview
 import com.dojolog.domain.disciplineKey
 import com.dojolog.ui.firstDayOfWeek
 import com.dojolog.ui.repository
@@ -48,22 +49,37 @@ data class CalendarUiState(
     val selectedSessions: List<TrainingSession> = emptyList(),
     val monthSummary: PeriodSummary = Stats.summarize(emptyList()),
     val streaks: Streaks = Streaks(0, 0),
+    /** The year overview: the viewed month's year unless another one was picked. */
+    val year: YearOverview = YearOverview(month.year, emptyMap(), 0, 0, 0, emptyList(), List(12) { 0 }),
+    /** The art the year overview is limited to, as applied; null for all. */
+    val yearArt: String? = null,
+    /** Training days of every month with training, for the month picker. */
+    val monthDays: Map<YearMonth, Int> = emptyMap(),
     val loading: Boolean = true,
+)
+
+/** Where the calendar is: the month shown, the chosen day and the year overview's settings. */
+private data class CalendarNav(
+    val month: YearMonth,
+    val selected: LocalDate,
+    /** The year the overview shows, or null to follow [month]. */
+    val year: Int? = null,
+    val yearArt: String? = null,
 )
 
 class CalendarViewModel(repository: TrainingRepository) : ViewModel() {
     private val today = LocalDate.now()
     private val weekStart = firstDayOfWeek()
-    private val month = MutableStateFlow(YearMonth.from(today))
-    private val selected = MutableStateFlow(today)
+    private val nav = MutableStateFlow(CalendarNav(YearMonth.from(today), today))
 
     val state: StateFlow<CalendarUiState> =
         combine(
             repository.observeSessions(),
             repository.disciplineSlots.filterNotNull(),
-            month,
-            selected,
-        ) { sessions, slots, month, selected ->
+            nav,
+        ) { sessions, slots, nav ->
+            val month = nav.month
+            val selected = nav.selected
             val inMonth = sessions.filter { YearMonth.from(it.date) == month }
             val gridStart = Stats.calendarGridStart(month, weekStart)
             val gridEnd = Stats.calendarGridEnd(month, weekStart)
@@ -75,6 +91,12 @@ class CalendarViewModel(repository: TrainingRepository) : ViewModel() {
                 YearMonth.from(today) == month -> today
                 else -> inMonth.maxByOrNull { it.date.toEpochDay() }?.date ?: month.atDay(1)
             }
+            // The year overview's filter applies only while its chips show (two or more arts).
+            val yearShown = nav.year ?: month.year
+            val names = Stats.artNames(sessions)
+            val allArts = Stats.yearOverview(sessions, yearShown, slots, names = names)
+            val yearArt = nav.yearArt?.takeIf { key -> allArts.arts.size > 1 && allArts.arts.any { it.key == key } }
+            val year = if (yearArt == null) allArts else Stats.yearOverview(sessions, yearShown, slots, yearArt, names)
             CalendarUiState(
                 month = month,
                 selected = effectiveSelection,
@@ -89,6 +111,9 @@ class CalendarViewModel(repository: TrainingRepository) : ViewModel() {
                 selectedSessions = sessions.filter { it.date == effectiveSelection }.sortedBy { it.createdAt },
                 monthSummary = Stats.summarize(inMonth),
                 streaks = Stats.streaks(sessions.map { it.date }, today, weekStart),
+                year = year,
+                yearArt = yearArt,
+                monthDays = Stats.trainingDaysByMonth(sessions),
                 loading = false,
             )
         }
@@ -111,14 +136,19 @@ class CalendarViewModel(repository: TrainingRepository) : ViewModel() {
             .sortedWith(compareBy<LegendEntry> { slots[it.key] ?: Int.MAX_VALUE }.thenBy { it.key })
     }
 
-    fun showPreviousMonth() = month.update { it.minusMonths(1) }
+    fun showPreviousMonth() = showMonth(nav.value.month.minusMonths(1))
 
-    fun showNextMonth() = month.update { it.plusMonths(1) }
+    fun showNextMonth() = showMonth(nav.value.month.plusMonths(1))
 
-    fun select(date: LocalDate) {
-        selected.value = date
-        month.value = YearMonth.from(date)
-    }
+    /** Opens [month]; the year overview follows it. */
+    fun showMonth(month: YearMonth) = nav.update { it.copy(month = month, year = null) }
+
+    fun select(date: LocalDate) = nav.update { it.copy(selected = date, month = YearMonth.from(date), year = null) }
+
+    /** Moves the year overview by [years] without changing the month shown. */
+    fun shiftYear(years: Int) = nav.update { it.copy(year = (it.year ?: it.month.year) + years) }
+
+    fun setYearArt(key: String?) = nav.update { it.copy(yearArt = key) }
 
     fun goToToday() = select(today)
 

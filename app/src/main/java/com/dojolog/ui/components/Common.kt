@@ -40,6 +40,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -426,16 +427,30 @@ fun ArtTags(arts: List<ArtCount>, modifier: Modifier = Modifier, showCounts: Boo
 }
 
 /** A coloured square plus a label, for chart and calendar legends; hatched when [hatch] is set. */
+/**
+ * A colour key: a small square and its label. [marked] rings it, e.g. the selected day's
+ * rating step. Every swatch keeps room for the ring, so marking one doesn't shift the rest.
+ */
 @Composable
-fun LegendSwatch(color: Color, label: String, hatch: Ramp? = null) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
+fun LegendSwatch(color: Color, label: String, hatch: Ramp? = null, marked: Boolean = false) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = if (marked) Modifier.semantics { stateDescription = "the selected day" } else Modifier,
+    ) {
         Box(
             Modifier
-                .size(12.dp)
+                .size(16.dp)
+                .then(if (marked) Modifier.border(1.5.dp, DojoColors.TextPrimary, RoundedCornerShape(4.dp)) else Modifier)
+                .padding(2.dp)
                 .clip(RoundedCornerShape(3.dp))
                 .then(if (hatch != null) Modifier.unratedHatch(hatch) else Modifier.background(color)),
         )
-        Spacer(Modifier.size(4.dp))
-        Text(label, style = MaterialTheme.typography.labelSmall, color = DojoColors.TextSecondary)
+        Spacer(Modifier.size(3.dp))
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            color = if (marked) DojoColors.TextPrimary else DojoColors.TextSecondary,
+            fontWeight = if (marked) FontWeight.Bold else null,
+        )
     }
 }

@@ -93,6 +93,39 @@ data class Overview(
     val opponentsFaced: Int = 0,
 )
 
+/**
+ * The martial art ([disciplineKey]) each Stats chart is limited to; null shows every art.
+ */
+data class ChartArts(
+    val activity: String? = null,
+    val trend: String? = null,
+    val breakdown: String? = null,
+    val techniques: String? = null,
+)
+
+/** A training day in the year overview. [main] is the art its square shows: the best rated. */
+data class YearDay(
+    val sessions: Int,
+    val main: DayMark,
+    /** Every art trained that day, in colour-slot order (see [Stats.dayMarks]). */
+    val marks: List<DayMark>,
+    /** Best overall score per art that day (0 when unrated). */
+    val bestScores: Map<String, Float>,
+)
+
+data class YearOverview(
+    val year: Int,
+    /** Only the days with training. */
+    val days: Map<LocalDate, YearDay>,
+    val trainingDays: Int,
+    val sessions: Int,
+    val minutes: Int,
+    /** The named martial arts trained that year, most sessions first (for the filter chips). */
+    val arts: List<ArtCount>,
+    /** Training days per month, January first. */
+    val monthDays: List<Int>,
+)
+
 /** Consecutive calendar weeks with at least one session. */
 data class Streaks(val currentWeeks: Int, val longestWeeks: Int)
 
@@ -219,11 +252,16 @@ object Stats {
      * Sessions grouped for the activity chart: weekly for short periods, monthly for a
      * year, and monthly or yearly for all time depending on how far back the log goes.
      */
+    /**
+     * Sessions per week, month or year for the period. With [artKey] only that martial art's
+     * sessions are counted, in the same buckets as for all arts.
+     */
     fun activity(
         sessions: List<TrainingSession>,
         period: StatsPeriod,
         today: LocalDate,
         firstDayOfWeek: DayOfWeek,
+        artKey: String? = null,
     ): List<ActivityBucket> {
         val days = period.days
         val size: BucketSize
@@ -252,9 +290,10 @@ object Stats {
                 }
             }
         }
+        val counted = ofArt(sessions, artKey)
         return starts.map { start ->
             val end = bucketEnd(start, size)
-            val inBucket = sessions.filter { !it.date.isBefore(start) && it.date.isBefore(end) }
+            val inBucket = counted.filter { !it.date.isBefore(start) && it.date.isBefore(end) }
             ActivityBucket(start, size, inBucket.size, inBucket.sumOf { it.durationMinutes })
         }
     }
@@ -349,8 +388,7 @@ object Stats {
         limit: Int = 5,
         names: Map<String, String> = artNames(sessions),
     ): List<TechniqueSummary> {
-        val counted = if (artKey == null) sessions else sessions.filter { disciplineKey(it.discipline) == artKey }
-        return techniqueSummaries(techniques, counted, names)
+        return techniqueSummaries(techniques, ofArt(sessions, artKey), names)
             .filter { it.sessions > 0 }
             .sortedWith(
                 compareByDescending<TechniqueSummary> { it.sessions }
@@ -360,18 +398,21 @@ object Stats {
             .take(limit)
     }
 
-    /** [techniqueArt] limits the top techniques to one martial art; null counts every art. */
+    /**
+     * Everything the Stats screen shows for [period]. [arts] limits single charts to one
+     * martial art; the summary, martial arts and record cover every art.
+     */
     fun overview(
         sessions: List<TrainingSession>,
         techniques: List<Technique>,
         period: StatsPeriod,
         today: LocalDate,
         firstDayOfWeek: DayOfWeek,
-        techniqueArt: String? = null,
+        arts: ChartArts = ChartArts(),
     ): Overview {
         val selected = inPeriod(sessions, period, today)
         val names = artNames(sessions)
-        val top = topTechniques(techniques, selected, techniqueArt, names = names)
+        val top = topTechniques(techniques, selected, arts.techniques, names = names)
         val disciplines = selected
             .groupBy { disciplineKey(it.discipline) }
             .map { (key, group) ->
@@ -383,14 +424,14 @@ object Stats {
                 )
             }
             .sortedByDescending { it.minutes }
-        val trend = selected
+        val trend = ofArt(selected, arts.trend)
             .filter { it.isRated }
             .sortedWith(compareBy<TrainingSession> { it.date.toEpochDay() }.thenBy { it.createdAt })
             .takeLast(TREND_POINTS)
         return Overview(
             summary = summarize(selected),
-            categoryAverages = categoryAverages(selected),
-            activity = activity(sessions, period, today, firstDayOfWeek),
+            categoryAverages = categoryAverages(ofArt(selected, arts.breakdown)),
+            activity = activity(sessions, period, today, firstDayOfWeek, arts.activity),
             ratingTrend = trend,
             topTechniques = top,
             disciplines = disciplines,
@@ -398,6 +439,55 @@ object Stats {
             opponentsFaced = OpponentStats.opponentsFaced(selected),
         )
     }
+
+    /** First and last day of the year overview's grid: whole weeks around the year. */
+    fun yearGridStart(year: Int, firstDayOfWeek: DayOfWeek): LocalDate = weekStart(LocalDate.of(year, 1, 1), firstDayOfWeek)
+
+    fun yearGridEnd(year: Int, firstDayOfWeek: DayOfWeek): LocalDate =
+        weekStart(LocalDate.of(year, 12, 31), firstDayOfWeek).plusDays(6)
+
+    /**
+     * The days trained in [year], coloured like the calendar ([slots]); with [artKey] only
+     * that martial art counts. [YearOverview.arts] always lists every art of the year.
+     */
+    fun yearOverview(
+        sessions: List<TrainingSession>,
+        year: Int,
+        slots: Map<String, Int>,
+        artKey: String? = null,
+        names: Map<String, String> = artNames(sessions),
+    ): YearOverview {
+        val inYear = sessions.filter { it.date.year == year }
+        val counted = ofArt(inYear, artKey)
+        val days = counted.groupBy { it.date }.mapValues { (_, daySessions) ->
+            YearDay(
+                sessions = daySessions.size,
+                main = dayMarks(daySessions, slots, maxMarks = 1).single(),
+                marks = dayMarks(daySessions, slots),
+                bestScores = daySessions.groupBy { disciplineKey(it.discipline) }.mapValues { (_, group) -> group.maxOf { it.overall } },
+            )
+        }
+        return YearOverview(
+            year = year,
+            days = days,
+            trainingDays = days.size,
+            sessions = counted.size,
+            minutes = counted.sumOf { it.durationMinutes },
+            arts = inYear
+                .filter { disciplineKey(it.discipline).isNotEmpty() }
+                .groupBy { disciplineKey(it.discipline) }
+                .map { (key, group) -> ArtCount(key, names[key] ?: group.first().discipline.trim(), group.size) }
+                .sortedWith(compareByDescending<ArtCount> { it.sessions }.thenBy { it.key }),
+            monthDays = (1..12).map { month -> days.keys.count { it.monthValue == month } },
+        )
+    }
+
+    /** Training days per month, for every month with training. */
+    fun trainingDaysByMonth(sessions: List<TrainingSession>): Map<YearMonth, Int> =
+        sessions.map { it.date }.distinct().groupingBy { YearMonth.from(it) }.eachCount()
+
+    private fun ofArt(sessions: List<TrainingSession>, artKey: String?): List<TrainingSession> =
+        if (artKey == null) sessions else sessions.filter { disciplineKey(it.discipline) == artKey }
 
     /**
      * Evenly spaced axis ticks from 0 that cover [maxValue] with at most [maxTicks]

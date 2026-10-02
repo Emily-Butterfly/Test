@@ -59,6 +59,7 @@ fun BarChart(
     modifier: Modifier = Modifier,
     height: Dp = 150.dp,
     wholeNumbers: Boolean = true,
+    color: Color = DojoColors.ChartSeries,
 ) {
     if (bars.isEmpty()) return
     var selected by remember(bars) {
@@ -106,7 +107,7 @@ fun BarChart(
                         ),
                     )
                 }
-                drawPath(path, DojoColors.ChartSeries.copy(alpha = if (index == selected) 1f else 0.5f))
+                drawPath(path, color.copy(alpha = if (index == selected) 1f else 0.5f))
             }
 
             // Thin the x labels so they never collide; the latest bar always keeps its label.
@@ -141,6 +142,7 @@ fun LineChart(
     modifier: Modifier = Modifier,
     height: Dp = 150.dp,
     surface: Color = MaterialTheme.colorScheme.surfaceContainer,
+    color: Color = DojoColors.ChartSeries,
 ) {
     if (points.isEmpty()) return
     var selected by remember(points) { mutableIntStateOf(points.lastIndex) }
@@ -189,10 +191,10 @@ fun LineChart(
                     lineTo(xFor(0), frame.bottom)
                     close()
                 }
-                drawPath(area, DojoColors.ChartSeries.copy(alpha = 0.10f))
+                drawPath(area, color.copy(alpha = 0.10f))
                 drawPath(
                     line,
-                    DojoColors.ChartSeries,
+                    color,
                     style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round),
                 )
             }
@@ -206,7 +208,7 @@ fun LineChart(
                 strokeWidth = 1.dp.toPx(),
             )
             drawCircle(surface, radius = 6.dp.toPx(), center = center)
-            drawCircle(DojoColors.ChartSeries, radius = 4.dp.toPx(), center = center)
+            drawCircle(color, radius = 4.dp.toPx(), center = center)
 
             // Label only the two ends of the x axis.
             val first = measurer.measure(points.first().label, axisStyle)

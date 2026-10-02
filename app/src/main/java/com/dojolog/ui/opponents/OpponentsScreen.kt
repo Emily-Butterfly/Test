@@ -1,11 +1,8 @@
 package com.dojolog.ui.opponents
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -17,7 +14,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -27,7 +23,6 @@ import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.PersonAdd
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -45,7 +40,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.style.TextOverflow
@@ -55,14 +49,14 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dojolog.domain.Opponent
 import com.dojolog.domain.OpponentSummary
 import com.dojolog.ui.Fmt
+import com.dojolog.ui.components.ArtFilterChips
 import com.dojolog.ui.components.ArtTags
 import com.dojolog.ui.components.EmptyState
 import com.dojolog.ui.theme.DojoColors
-import com.dojolog.ui.theme.LocalDisciplineColors
 import java.time.LocalDate
 
 /** Everyone you spar with or compete against, with your record against each. */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun OpponentsScreen(
     onBack: () -> Unit,
@@ -134,29 +128,7 @@ fun OpponentsScreen(
                 }
                 if (state.arts.size > 1) {
                     item(key = "arts") {
-                        val colors = LocalDisciplineColors.current
-                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            FilterChip(
-                                selected = state.art == null,
-                                onClick = { viewModel.setArt(null) },
-                                label = { Text("All arts") },
-                            )
-                            state.arts.forEach { art ->
-                                FilterChip(
-                                    selected = state.art == art.key,
-                                    onClick = { viewModel.setArt(if (state.art == art.key) null else art.key) },
-                                    label = { Text(art.name) },
-                                    leadingIcon = {
-                                        Box(
-                                            Modifier
-                                                .size(10.dp)
-                                                .clip(CircleShape)
-                                                .background(colors.rampForKey(art.key).identity),
-                                        )
-                                    },
-                                )
-                            }
-                        }
+                        ArtFilterChips(state.arts, state.art, viewModel::setArt)
                     }
                 }
                 item(key = "summary") {

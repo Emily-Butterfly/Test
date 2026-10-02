@@ -12,8 +12,13 @@ log stays in a local database on your phone.
   good, even when old sessions are deleted or renamed. Unrated sessions are hatched, and a
   day with several arts is split into stripes. The grid shows whole weeks, so the first and
   last rows include days of the previous and next month (drawn as smaller tiles); tap one
-  to jump to that month. Swipe or use the arrows to change month, and tap a day to see or
-  add its sessions. Monthly totals and your weekly training streak sit under the calendar.
+  to jump to that month. Use the arrows to change month, or tap the month's name to pick any
+  month (each shows its training days). The rating key below the grid is drawn in the
+  colour of the selected day's art, with that day's rating marked. Tap a day to see or add
+  its sessions. Monthly totals and your weekly training streak sit under the calendar.
+- **Year overview**: a GitHub-style grid of the whole year under the calendar, one square
+  per day in the art's colour and brighter for better ratings. Filter it by art, tap a day
+  to see what you trained, and jump to it in the calendar.
 - **Session log**: date, duration (quick picks from 45 minutes to 2 hours), martial art (it
   remembers the ones you use), session type (class, open mat, sparring, private, solo,
   competition) and notes.
@@ -30,7 +35,8 @@ log stays in a local database on your phone.
   The library can be searched, filtered by category and sorted.
 - **Overall stats**: totals for 30 days, 90 days, 12 months or all time, an activity chart,
   the trend of your overall rating, average score per category, your sparring and
-  competition record, most practised techniques (all arts or one) and time per martial art.
+  competition record, most practised techniques and time per martial art. The activity,
+  rating, breakdown and technique charts can each be limited to one martial art.
 - **Record by opponent** (Stats → *Record by opponent*): everyone you have faced, with
   wins–losses–draws, win rate, average rating and when you last met, filterable by art. Each
   person has a page with their club, grade, weight and your notes on them, a rating trend

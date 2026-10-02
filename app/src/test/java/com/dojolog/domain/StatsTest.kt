@@ -2,6 +2,7 @@ package com.dojolog.domain
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.DayOfWeek
 import java.time.LocalDate
@@ -377,7 +378,7 @@ class StatsTest {
         assertEquals(listOf("Armbar" to 3, "Jab" to 1), bjj.map { it.technique.name to it.sessions })
         assertEquals(emptyList<TechniqueSummary>(), Stats.topTechniques(listOf(armbar, jab), sessions, artKey = "judo"))
 
-        val overview = Stats.overview(sessions, listOf(armbar, jab), StatsPeriod.ALL, today, DayOfWeek.MONDAY, techniqueArt = "bjj")
+        val overview = Stats.overview(sessions, listOf(armbar, jab), StatsPeriod.ALL, today, DayOfWeek.MONDAY, arts = ChartArts(techniques = "bjj"))
         assertEquals(listOf("Armbar", "Jab"), overview.topTechniques.map { it.technique.name })
         assertEquals(1, overview.topTechniques.last().sessions)
     }
@@ -398,5 +399,85 @@ class StatsTest {
                 assertEquals(0L, days % 7)
             }
         }
+    }
+
+    @Test
+    fun yearOverviewColoursEachDayByItsBestRatedArt() {
+        val slots = mapOf("bjj" to 0, "judo" to 1)
+        val sessions = listOf(
+            session(1, LocalDate.of(2026, 3, 3), overall = 6f, discipline = "BJJ", minutes = 60),
+            session(2, LocalDate.of(2026, 3, 3), overall = 9f, discipline = "Judo", minutes = 90),
+            session(3, LocalDate.of(2026, 3, 10), overall = 0f, discipline = "BJJ", minutes = 60),
+            session(4, LocalDate.of(2026, 7, 1), overall = 8f, discipline = "bjj", minutes = 45),
+            session(5, LocalDate.of(2025, 12, 31), overall = 8f, discipline = "Judo"),
+        )
+        val year = Stats.yearOverview(sessions, 2026, slots)
+        assertEquals(3, year.trainingDays)
+        assertEquals(4, year.sessions)
+        assertEquals(255, year.minutes)
+        val twoArts = year.days.getValue(LocalDate.of(2026, 3, 3))
+        assertEquals(DayMark("judo", 4), twoArts.main)
+        assertEquals(listOf(DayMark("bjj", 2), DayMark("judo", 4)), twoArts.marks)
+        assertEquals(mapOf("bjj" to 6f, "judo" to 9f), twoArts.bestScores)
+        assertEquals(DayMark("bjj", 0), year.days.getValue(LocalDate.of(2026, 3, 10)).main)
+        assertEquals(listOf(ArtCount("bjj", "BJJ", 3), ArtCount("judo", "Judo", 1)), year.arts)
+        assertEquals(listOf(0, 0, 2, 0, 0, 0, 1, 0, 0, 0, 0, 0), year.monthDays)
+
+        // Limited to one art, only its days count, but the chips still list every art.
+        val judo = Stats.yearOverview(sessions, 2026, slots, artKey = "judo")
+        assertEquals(setOf(LocalDate.of(2026, 3, 3)), judo.days.keys)
+        assertEquals(DayMark("judo", 4), judo.days.getValue(LocalDate.of(2026, 3, 3)).main)
+        assertEquals(year.arts, judo.arts)
+    }
+
+    @Test
+    fun yearGridCoversWholeWeeksAroundTheYear() {
+        // 2026 starts on a Thursday and ends on a Thursday.
+        assertEquals(LocalDate.of(2025, 12, 29), Stats.yearGridStart(2026, DayOfWeek.MONDAY))
+        assertEquals(LocalDate.of(2027, 1, 3), Stats.yearGridEnd(2026, DayOfWeek.MONDAY))
+        assertEquals(LocalDate.of(2025, 12, 28), Stats.yearGridStart(2026, DayOfWeek.SUNDAY))
+        for (year in 2020..2030) {
+            for (first in DayOfWeek.entries) {
+                val days = java.time.temporal.ChronoUnit.DAYS.between(Stats.yearGridStart(year, first), Stats.yearGridEnd(year, first)) + 1
+                assertEquals(0L, days % 7)
+                assertTrue(days / 7 in 53..54)
+            }
+        }
+    }
+
+    @Test
+    fun trainingDaysAreCountedPerMonth() {
+        val sessions = listOf(
+            session(1, LocalDate.of(2026, 9, 1)),
+            session(2, LocalDate.of(2026, 9, 1)),
+            session(3, LocalDate.of(2026, 9, 2)),
+            session(4, LocalDate.of(2025, 9, 2)),
+        )
+        assertEquals(
+            mapOf(java.time.YearMonth.of(2026, 9) to 2, java.time.YearMonth.of(2025, 9) to 1),
+            Stats.trainingDaysByMonth(sessions),
+        )
+    }
+
+    @Test
+    fun eachChartCanBeLimitedToItsOwnArt() {
+        val sessions = listOf(
+            session(1, today, overall = 8f, ratings = Ratings(technique = 8), discipline = "BJJ"),
+            session(2, today.minusDays(1), overall = 4f, ratings = Ratings(technique = 4), discipline = "Judo"),
+            session(3, today.minusDays(8), overall = 6f, ratings = Ratings(technique = 6), discipline = "BJJ"),
+        )
+        val all = Stats.overview(sessions, emptyList(), StatsPeriod.DAYS_30, today, DayOfWeek.MONDAY)
+        val limited = Stats.overview(
+            sessions, emptyList(), StatsPeriod.DAYS_30, today, DayOfWeek.MONDAY,
+            arts = ChartArts(activity = "judo", trend = "bjj", breakdown = "judo"),
+        )
+        // The same buckets, counting only Judo.
+        assertEquals(all.activity.map { it.start }, limited.activity.map { it.start })
+        assertEquals(3, all.activity.sumOf { it.sessions })
+        assertEquals(1, limited.activity.sumOf { it.sessions })
+        assertEquals(listOf(6f, 8f), limited.ratingTrend.map { it.overall })
+        assertEquals(4f, limited.categoryAverages[RatingCategory.TECHNIQUE]!!, 0.001f)
+        // The summary always covers every art.
+        assertEquals(all.summary, limited.summary)
     }
 }

@@ -1,9 +1,9 @@
 package com.dojolog.ui.calendar
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,40 +21,52 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.outlined.SelfImprovement
 import androidx.compose.material.icons.outlined.Today
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.dojolog.domain.DayMark
 import com.dojolog.domain.MAX_SCORE
 import com.dojolog.ui.Fmt
 import com.dojolog.ui.components.BackupMenu
@@ -66,13 +78,13 @@ import com.dojolog.ui.components.TileRow
 import com.dojolog.ui.components.unratedHatch
 import com.dojolog.ui.theme.DojoColors
 import com.dojolog.ui.theme.LocalDisciplineColors
+import kotlinx.coroutines.launch
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.TextStyle as JavaTextStyle
 import java.time.temporal.ChronoUnit
 import java.util.Locale
-import kotlin.math.abs
 import kotlin.math.min
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -84,6 +96,9 @@ fun CalendarScreen(
     viewModel: CalendarViewModel = viewModel(factory = CalendarViewModel.Factory),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    var showMonthPicker by rememberSaveable { mutableStateOf(false) }
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
 
     Scaffold(
         topBar = {
@@ -107,6 +122,7 @@ fun CalendarScreen(
         },
     ) { padding ->
         LazyColumn(
+            state = listState,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding),
@@ -119,6 +135,7 @@ fun CalendarScreen(
                         month = state.month,
                         onPrevious = viewModel::showPreviousMonth,
                         onNext = viewModel::showNextMonth,
+                        onPick = { showMonthPicker = true },
                     )
                     Spacer(Modifier.height(8.dp))
                     MonthGrid(
@@ -131,11 +148,10 @@ fun CalendarScreen(
                         names = state.legend.associate { it.key to it.name },
                         firstDayOfWeek = state.firstDayOfWeek,
                         onSelect = viewModel::select,
-                        onSwipePrevious = viewModel::showPreviousMonth,
-                        onSwipeNext = viewModel::showNextMonth,
                     )
                     Spacer(Modifier.height(12.dp))
-                    CalendarLegend(state.legend)
+                    // The rating scale takes the colour of the selected day's art(s).
+                    CalendarLegend(state.legend, focus = state.days[state.selected]?.marks.orEmpty())
                 }
             }
             item(key = "summary") {
@@ -188,22 +204,57 @@ fun CalendarScreen(
             items(state.selectedSessions, key = { it.id }) { session ->
                 SessionCard(session = session, onClick = { onOpenSession(session.id) })
             }
+            item(key = "year") {
+                YearOverviewCard(
+                    overview = state.year,
+                    art = state.yearArt,
+                    firstDayOfWeek = state.firstDayOfWeek,
+                    today = state.today,
+                    onArt = viewModel::setYearArt,
+                    onPreviousYear = { viewModel.shiftYear(-1) },
+                    onNextYear = { viewModel.shiftYear(1) },
+                    onShowDay = { date ->
+                        viewModel.select(date)
+                        scope.launch { listState.animateScrollToItem(0) }
+                    },
+                )
+            }
         }
+    }
+
+    if (showMonthPicker) {
+        MonthPickerDialog(
+            shown = state.month,
+            today = state.today,
+            monthDays = state.monthDays,
+            onPick = { month ->
+                viewModel.showMonth(month)
+                showMonthPicker = false
+            },
+            onDismiss = { showMonthPicker = false },
+        )
     }
 }
 
+/** The month's name opens the month picker; the arrows step one month. */
 @Composable
-private fun MonthHeader(month: YearMonth, onPrevious: () -> Unit, onNext: () -> Unit) {
+private fun MonthHeader(month: YearMonth, onPrevious: () -> Unit, onNext: () -> Unit, onPick: () -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         IconButton(onClick = onPrevious) {
             Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Previous month")
         }
-        Text(
-            Fmt.monthYear(month),
-            style = MaterialTheme.typography.titleMedium,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.weight(1f),
-        )
+        Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable(onClickLabel = "Choose a month", onClick = onPick)
+                    .padding(start = 12.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
+            ) {
+                Text(Fmt.monthYear(month), style = MaterialTheme.typography.titleMedium)
+                Icon(Icons.Filled.ArrowDropDown, contentDescription = null, tint = DojoColors.TextSecondary)
+            }
+        }
         IconButton(onClick = onNext) {
             Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Next month")
         }
@@ -225,31 +276,12 @@ private fun MonthGrid(
     names: Map<String, String>,
     firstDayOfWeek: DayOfWeek,
     onSelect: (LocalDate) -> Unit,
-    onSwipePrevious: () -> Unit,
-    onSwipeNext: () -> Unit,
 ) {
     val weekdays = remember(firstDayOfWeek) { (0L until 7L).map { firstDayOfWeek.plus(it) } }
     val locale = Locale.getDefault()
     val rows = (ChronoUnit.DAYS.between(gridStart, gridEnd).toInt() + 1) / 7
 
-    Column(
-        Modifier.pointerInput(Unit) {
-            var total = 0f
-            detectHorizontalDragGestures(
-                onDragStart = { total = 0f },
-                onDragEnd = {
-                    val threshold = 56.dp.toPx()
-                    if (abs(total) > threshold) {
-                        if (total > 0) onSwipePrevious() else onSwipeNext()
-                    }
-                },
-                onHorizontalDrag = { change, amount ->
-                    total += amount
-                    change.consume()
-                },
-            )
-        },
-    ) {
+    Column {
         Row(Modifier.fillMaxWidth()) {
             weekdays.forEach { day ->
                 Text(
@@ -413,11 +445,21 @@ private val Halo = Color.Black.copy(alpha = 0.85f)
 
 private val LEVEL_LABELS = listOf("1 to 4", "5 to 6", "7 to 8", "9 to 10")
 
-/** Which colour is which art, and how brightness maps to rating (in the first art's colour). */
+/**
+ * Which colour is which art (left out with [showArts] false, e.g. when filter chips already
+ * say it), and how brightness maps to rating. The rating scale is drawn in the colour of
+ * each art in [focus], the selected day's, with that day's step ringed; on a day without
+ * training it uses [scaleKey], or else the first art in [entries].
+ */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun CalendarLegend(entries: List<LegendEntry>) {
-    if (entries.isEmpty()) {
+internal fun CalendarLegend(
+    entries: List<LegendEntry>,
+    focus: List<DayMark>,
+    showArts: Boolean = true,
+    scaleKey: String? = null,
+) {
+    if (entries.isEmpty() && focus.isEmpty()) {
         Text(
             "Each martial art gets its own colour; brighter means a better rating.",
             style = MaterialTheme.typography.labelSmall,
@@ -426,27 +468,131 @@ private fun CalendarLegend(entries: List<LegendEntry>) {
         return
     }
     val colors = LocalDisciplineColors.current
-    val scale = colors.rampForKey(entries.first().key)
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            entries.forEach { LegendSwatch(colors.rampForKey(it.key).identity, it.name) }
+    val names = entries.associate { it.key to it.name }
+    val scales: List<DayMark?> = focus.ifEmpty { listOf(null) }
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        if (showArts) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                entries.forEach { LegendSwatch(colors.rampForKey(it.key).identity, it.name) }
+            }
         }
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            Text("Rating:", style = MaterialTheme.typography.labelSmall, color = DojoColors.TextMuted)
-            LegendSwatch(Color.Unspecified, "unrated", hatch = scale)
-            LegendSwatch(scale.fill(1), "1–4")
-            LegendSwatch(scale.fill(2), "5–6")
-            LegendSwatch(scale.fill(3), "7–8")
-            LegendSwatch(scale.fill(4), "9–10")
+        scales.forEach { mark ->
+            val key = mark?.disciplineKey ?: scaleKey ?: entries.first().key
+            val scale = colors.rampForKey(key)
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(
+                    if (focus.size > 1) "${names[key] ?: key.ifEmpty { "Unspecified" }}:" else "Rating:",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = DojoColors.TextMuted,
+                )
+                LegendSwatch(Color.Unspecified, "unrated", hatch = scale, marked = mark?.level == 0)
+                LEVEL_RANGES.forEachIndexed { index, range ->
+                    LegendSwatch(scale.fill(index + 1), range, marked = mark?.level == index + 1)
+                }
+            }
         }
     }
 }
+
+private val LEVEL_RANGES = listOf("1–4", "5–6", "7–8", "9–10")
+
+/** Pick any month: a year at a time, each month with its number of training days. */
+@Composable
+internal fun MonthPickerDialog(
+    shown: YearMonth,
+    today: LocalDate,
+    monthDays: Map<YearMonth, Int>,
+    onPick: (YearMonth) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var year by rememberSaveable { mutableIntStateOf(shown.year) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = { year-- }, enabled = year > MIN_YEAR) {
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Previous year")
+                }
+                Text(
+                    year.toString(),
+                    style = MaterialTheme.typography.titleLarge,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .weight(1f)
+                        .semantics { heading() },
+                )
+                IconButton(onClick = { year++ }, enabled = year < MAX_YEAR) {
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Next year")
+                }
+            }
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                for (row in 0 until 4) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        for (column in 0 until 3) {
+                            val month = YearMonth.of(year, row * 3 + column + 1)
+                            MonthChoice(
+                                month = month,
+                                isShown = month == shown,
+                                isCurrent = month == YearMonth.from(today),
+                                trainingDays = monthDays[month] ?: 0,
+                                onClick = { onPick(month) },
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { onPick(YearMonth.from(today)) }) { Text("This month") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+}
+
+@Composable
+private fun MonthChoice(
+    month: YearMonth,
+    isShown: Boolean,
+    isCurrent: Boolean,
+    trainingDays: Int,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val locale = Locale.getDefault()
+    val ink = if (isShown) MaterialTheme.colorScheme.onPrimaryContainer else DojoColors.TextPrimary
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(12.dp),
+        color = if (isShown) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHighest,
+        border = if (isCurrent && !isShown) BorderStroke(1.dp, DojoColors.TextSecondary) else null,
+        modifier = modifier.semantics { selected = isShown },
+    ) {
+        val days = if (trainingDays > 0) Fmt.count(trainingDays, "day") else "–"
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier
+                .padding(vertical = 10.dp)
+                .clearAndSetSemantics {
+                    contentDescription = "${Fmt.monthYear(month)}, " +
+                        (if (trainingDays > 0) Fmt.count(trainingDays, "training day") else "no training") +
+                        if (isCurrent) ", this month" else ""
+                },
+        ) {
+            Text(month.month.getDisplayName(JavaTextStyle.SHORT, locale), style = MaterialTheme.typography.titleSmall, color = ink)
+            Text(days, style = MaterialTheme.typography.labelSmall, color = if (isShown) ink else DojoColors.TextMuted)
+        }
+    }
+}
+
+private const val MIN_YEAR = 1900
+private const val MAX_YEAR = 2100
 
 @Composable
 private fun RestDay() {

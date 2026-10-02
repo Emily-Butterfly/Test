@@ -1,11 +1,7 @@
 package com.dojolog.ui.stats
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,7 +13,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.Insights
@@ -36,12 +31,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.dojolog.domain.ArtCount
 import com.dojolog.domain.BucketSize
 import com.dojolog.domain.MAX_SCORE
 import com.dojolog.domain.Overview
@@ -49,6 +45,7 @@ import com.dojolog.domain.RatingCategory
 import com.dojolog.domain.StatsPeriod
 import com.dojolog.domain.Streaks
 import com.dojolog.ui.Fmt
+import com.dojolog.ui.components.ArtFilterChips
 import com.dojolog.ui.components.BackupMenu
 import com.dojolog.ui.components.BarChart
 import com.dojolog.ui.components.ChartBar
@@ -124,16 +121,22 @@ fun StatsScreen(
             if (overview != null) {
                 item(key = "tiles") { SummaryTiles(overview, state.streaks) }
                 item(key = "opponents") { OpponentsCard(overview, onOpenOpponents) }
-                item(key = "activity") { ActivityCard(overview) }
-                item(key = "trend") { RatingTrendCard(overview) }
-                item(key = "breakdown") { BreakdownCard(overview) }
+                // The named arts of the period, for the charts' filter chips.
+                val arts = overview.disciplines
+                    .filter { it.key.isNotEmpty() }
+                    .map { ArtCount(it.key, it.name, it.sessions) }
+                val chosen = state.arts
+                item(key = "activity") {
+                    ActivityCard(overview, arts, chosen.activity) { viewModel.setArt(StatsChart.ACTIVITY, it) }
+                }
+                item(key = "trend") {
+                    RatingTrendCard(overview, arts, chosen.trend) { viewModel.setArt(StatsChart.TREND, it) }
+                }
+                item(key = "breakdown") {
+                    BreakdownCard(overview, arts, chosen.breakdown) { viewModel.setArt(StatsChart.BREAKDOWN, it) }
+                }
                 item(key = "techniques") {
-                    TopTechniquesCard(
-                        overview = overview,
-                        selectedArt = state.techniqueArt,
-                        onSelectArt = viewModel::setTechniqueArt,
-                        onOpenTechnique = onOpenTechnique,
-                    )
+                    TopTechniquesCard(overview, arts, chosen.techniques, { viewModel.setArt(StatsChart.TECHNIQUES, it) }, onOpenTechnique)
                 }
                 if (overview.disciplines.size > 1) {
                     item(key = "disciplines") { DisciplinesCard(overview) }
@@ -228,7 +231,7 @@ private fun OpponentsCard(overview: Overview, onOpenOpponents: () -> Unit) {
 }
 
 @Composable
-private fun ActivityCard(overview: Overview) {
+private fun ActivityCard(overview: Overview, arts: List<ArtCount>, art: String?, onArt: (String?) -> Unit) {
     val bars = remember(overview.activity) {
         overview.activity.map { bucket ->
             ChartBar(
@@ -244,25 +247,29 @@ private fun ActivityCard(overview: Overview) {
         BucketSize.YEAR -> "year"
         else -> "month"
     }
+    val artName = arts.nameOf(art)
     SectionCard(
         modifier = Modifier.padding(horizontal = 16.dp),
         title = "Activity",
-        subtitle = "Sessions per $unit · tap a bar for details",
+        subtitle = (if (artName != null) "$artName sessions" else "Sessions") + " per $unit · tap a bar for details",
     ) {
-        BarChart(bars)
+        ArtFilterChips(arts, art, onArt, Modifier.padding(bottom = 8.dp))
+        BarChart(bars, color = artColor(art))
     }
 }
 
 @Composable
-private fun RatingTrendCard(overview: Overview) {
+private fun RatingTrendCard(overview: Overview, arts: List<ArtCount>, art: String?, onArt: (String?) -> Unit) {
+    val artName = arts.nameOf(art)
     SectionCard(
         modifier = Modifier.padding(horizontal = 16.dp),
         title = "Overall rating",
-        subtitle = "Rated sessions in order, out of $MAX_SCORE",
+        subtitle = "Rated ${if (artName != null) "$artName sessions" else "sessions"} in order, out of $MAX_SCORE",
     ) {
+        ArtFilterChips(arts, art, onArt, Modifier.padding(bottom = 8.dp))
         if (overview.ratingTrend.size < 2) {
             Text(
-                "Rate at least two sessions in this period to see a trend.",
+                "Rate at least two ${if (artName != null) "$artName sessions" else "sessions"} in this period to see a trend.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = DojoColors.TextSecondary,
             )
@@ -282,84 +289,59 @@ private fun RatingTrendCard(overview: Overview) {
                 minValue = 0f,
                 maxValue = MAX_SCORE.toFloat(),
                 ticks = listOf(0f, 5f, 10f),
+                color = artColor(art),
             )
         }
     }
 }
 
 @Composable
-private fun BreakdownCard(overview: Overview) {
+private fun BreakdownCard(overview: Overview, arts: List<ArtCount>, art: String?, onArt: (String?) -> Unit) {
+    val artName = arts.nameOf(art)
     SectionCard(
         modifier = Modifier.padding(horizontal = 16.dp),
         title = "Rating breakdown",
-        subtitle = "Average per category, out of $MAX_SCORE",
+        subtitle = if (artName != null) "$artName sessions, average per category" else "Average per category, out of $MAX_SCORE",
     ) {
+        ArtFilterChips(arts, art, onArt, Modifier.padding(bottom = 8.dp))
+        val color = artColor(art)
         RatingCategory.entries.forEach { category ->
             val average = overview.categoryAverages[category]
             MeterRow(
                 label = category.label,
                 fraction = (average ?: 0f) / MAX_SCORE,
                 valueText = average?.let { Fmt.decimal(it) } ?: "–",
+                color = color,
             )
         }
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun TopTechniquesCard(
     overview: Overview,
-    selectedArt: String?,
-    onSelectArt: (String?) -> Unit,
+    arts: List<ArtCount>,
+    art: String?,
+    onArt: (String?) -> Unit,
     onOpenTechnique: (Long) -> Unit,
 ) {
-    val arts = overview.disciplines.filter { it.key.isNotEmpty() }
-    val selectedName = arts.firstOrNull { it.key == selectedArt }?.name
+    val artName = arts.nameOf(art)
     SectionCard(
         modifier = Modifier.padding(horizontal = 16.dp),
         title = "Most practised techniques",
-        subtitle = if (selectedName != null) "Sessions of $selectedName" else "By number of sessions",
+        subtitle = if (artName != null) "Sessions of $artName" else "By number of sessions",
     ) {
-        if (arts.size > 1) {
-            // Filter by martial art: counts only the sessions of that art.
-            val colors = LocalDisciplineColors.current
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.padding(bottom = 8.dp),
-            ) {
-                FilterChip(
-                    selected = selectedArt == null,
-                    onClick = { onSelectArt(null) },
-                    label = { Text("All arts") },
-                )
-                arts.forEach { art ->
-                    FilterChip(
-                        selected = selectedArt == art.key,
-                        onClick = { onSelectArt(if (selectedArt == art.key) null else art.key) },
-                        label = { Text(art.name) },
-                        leadingIcon = {
-                            Box(
-                                Modifier
-                                    .size(10.dp)
-                                    .clip(CircleShape)
-                                    .background(colors.rampForKey(art.key).identity),
-                            )
-                        },
-                    )
-                }
-            }
-        }
+        ArtFilterChips(arts, art, onArt, Modifier.padding(bottom = 8.dp))
         if (overview.topTechniques.isEmpty()) {
             Text(
-                if (selectedName != null) "No techniques logged for $selectedName in this period."
+                if (artName != null) "No techniques logged for $artName in this period."
                 else "No techniques logged in this period.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = DojoColors.TextSecondary,
             )
         }
         val most = overview.topTechniques.maxOfOrNull { it.sessions } ?: 1
-        // Filtered to one art, the bars take that art's colour.
-        val barColor = selectedArt?.let { LocalDisciplineColors.current.rampForKey(it).identity } ?: DojoColors.ChartSeries
+        val barColor = artColor(art)
         overview.topTechniques.forEach { summary ->
             MeterRow(
                 label = summary.technique.name,
@@ -376,6 +358,13 @@ private fun TopTechniquesCard(
         }
     }
 }
+
+private fun List<ArtCount>.nameOf(key: String?): String? = key?.let { k -> firstOrNull { it.key == k }?.name }
+
+/** A chart limited to one art takes that art's colour; across all arts it stays neutral. */
+@Composable
+private fun artColor(art: String?): Color =
+    art?.let { LocalDisciplineColors.current.rampForKey(it).identity } ?: DojoColors.ChartSeries
 
 @Composable
 private fun DisciplinesCard(overview: Overview) {

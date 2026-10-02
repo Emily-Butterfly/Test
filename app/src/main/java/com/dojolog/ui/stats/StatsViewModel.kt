@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.dojolog.data.TrainingRepository
+import com.dojolog.domain.ChartArts
 import com.dojolog.domain.Overview
 import com.dojolog.domain.Stats
 import com.dojolog.domain.StatsPeriod
@@ -19,6 +20,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import java.time.LocalDate
 
 data class StatsUiState(
@@ -28,35 +30,44 @@ data class StatsUiState(
     val streaks: Streaks = Streaks(0, 0),
     val hasSessions: Boolean = false,
     val today: LocalDate = LocalDate.now(),
-    /** Martial art ([com.dojolog.domain.disciplineKey]) the top techniques are limited to; null for all. */
-    val techniqueArt: String? = null,
+    /** The martial art each chart is limited to, as applied (see [StatsViewModel.setArt]). */
+    val arts: ChartArts = ChartArts(),
 )
+
+/** The Stats charts that can be limited to one martial art. */
+enum class StatsChart { ACTIVITY, TREND, BREAKDOWN, TECHNIQUES }
 
 class StatsViewModel(repository: TrainingRepository) : ViewModel() {
     private val today = LocalDate.now()
     private val weekStart = firstDayOfWeek()
     private val period = MutableStateFlow(StatsPeriod.DAYS_90)
-    private val techniqueArt = MutableStateFlow<String?>(null)
+    private val chartArts = MutableStateFlow<Map<StatsChart, String>>(emptyMap())
 
     val state: StateFlow<StatsUiState> = combine(
         repository.observeSessions(),
         repository.observeTechniques(),
         period,
-        techniqueArt,
-    ) { sessions, techniques, period, techniqueArt ->
-        // The filter only applies while its chips are shown: two or more named arts in the
-        // period, the chosen one among them. Otherwise it falls back to all arts, and the
-        // choice is kept for when such a period is picked again.
+        chartArts,
+    ) { sessions, techniques, period, chartArts ->
+        // A chart's filter only applies while its chips are shown: two or more named arts in
+        // the period, the chosen one among them. Otherwise the chart falls back to all arts,
+        // and the choice is kept for when such a period is picked again.
         val namedArts = Stats.inPeriod(sessions, period, today)
             .map { disciplineKey(it.discipline) }
             .filter { it.isNotEmpty() }
             .toSet()
-        val art = techniqueArt?.takeIf { namedArts.size > 1 && it in namedArts }
+        fun art(chart: StatsChart) = chartArts[chart]?.takeIf { namedArts.size > 1 && it in namedArts }
+        val arts = ChartArts(
+            activity = art(StatsChart.ACTIVITY),
+            trend = art(StatsChart.TREND),
+            breakdown = art(StatsChart.BREAKDOWN),
+            techniques = art(StatsChart.TECHNIQUES),
+        )
         StatsUiState(
             loading = false,
             period = period,
-            overview = Stats.overview(sessions, techniques, period, today, weekStart, techniqueArt = art),
-            techniqueArt = art,
+            overview = Stats.overview(sessions, techniques, period, today, weekStart, arts),
+            arts = arts,
             streaks = Stats.streaks(sessions.map { it.date }, today, weekStart),
             hasSessions = sessions.isNotEmpty(),
             today = today,
@@ -69,8 +80,9 @@ class StatsViewModel(repository: TrainingRepository) : ViewModel() {
         period.value = value
     }
 
-    fun setTechniqueArt(key: String?) {
-        techniqueArt.value = key
+    /** Limits [chart] to the martial art [key] (a [disciplineKey]); null shows every art. */
+    fun setArt(chart: StatsChart, key: String?) {
+        chartArts.update { if (key == null) it - chart else it + (chart to key) }
     }
 
     companion object {
