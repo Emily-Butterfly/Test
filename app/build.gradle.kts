@@ -70,6 +70,14 @@ ksp {
     arg("room.generateKotlin", "true")
 }
 
+// List every test in the CI log, so it shows the database tests really ran.
+tasks.withType<Test>().configureEach {
+    testLogging {
+        events("passed", "skipped", "failed")
+        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+    }
+}
+
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
