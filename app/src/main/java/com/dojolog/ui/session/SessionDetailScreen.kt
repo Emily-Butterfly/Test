@@ -205,7 +205,7 @@ private fun SessionDetailContent(
         if (session.matchups.isNotEmpty()) {
             item {
                 val record = OpponentStats.record(listOf(session))
-                SectionCard(title = "Opponents", subtitle = Fmt.record(record)) {
+                SectionCard(title = "Opponents", subtitle = Fmt.record(record), subtitleDescription = Fmt.recordSpoken(record)) {
                     session.matchups.forEachIndexed { index, matchup ->
                         if (index > 0) HorizontalDivider(color = DojoColors.OutlineVariant)
                         MatchupRow(matchup, onClick = { onOpenOpponent(matchup.opponentId) })

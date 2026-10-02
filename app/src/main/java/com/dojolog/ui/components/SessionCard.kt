@@ -14,6 +14,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.dojolog.domain.OpponentStats
@@ -56,13 +58,25 @@ fun SessionCard(
                 )
                 if (session.matchups.isNotEmpty()) {
                     val names = session.matchups.map { it.opponentName }.distinct().joinToString(", ")
-                    Text(
-                        "vs $names · ${Fmt.record(OpponentStats.record(listOf(session)))}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = DojoColors.TextSecondary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                    val record = OpponentStats.record(listOf(session))
+                    // Long name lists give way first, so the record always shows.
+                    Row(Modifier.clearAndSetSemantics { contentDescription = "Against $names: ${Fmt.recordSpoken(record)}" }) {
+                        Text(
+                            "vs $names",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = DojoColors.TextSecondary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false),
+                        )
+                        Text(
+                            " · ${Fmt.record(record)}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = DojoColors.TextSecondary,
+                            maxLines = 1,
+                            softWrap = false,
+                        )
+                    }
                 }
                 if (session.techniques.isNotEmpty()) {
                     Spacer(Modifier.height(10.dp))

@@ -59,6 +59,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -422,7 +423,7 @@ private fun TechniqueEntryEditor(
         OutlinedTextField(
             value = entry.notes,
             onValueChange = { onChange(entry.copy(notes = it)) },
-            placeholder = { Text("Note (optional)") },
+            label = { Text("Note (optional)") },
             maxLines = 3,
             textStyle = MaterialTheme.typography.bodyMedium,
             keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
@@ -522,12 +523,17 @@ private fun MatchupEditor(
             onValueChange = { onChange(matchup.copy(rating = it.roundToInt())) },
             valueRange = 0f..MAX_SCORE.toFloat(),
             steps = MAX_SCORE - 1,
-            modifier = Modifier.semantics { contentDescription = "Rating against ${matchup.opponentName}" },
+            modifier = Modifier.semantics {
+                contentDescription = listOfNotNull("Rating against ${matchup.opponentName}", roundLabel?.lowercase())
+                    .joinToString(", ")
+                stateDescription = ratingState(matchup.rating)
+            },
         )
         OutlinedTextField(
             value = matchup.notes,
             onValueChange = { onChange(matchup.copy(notes = it)) },
-            placeholder = { Text("Comment (optional)") },
+            label = { Text("Comment (optional)") },
+            placeholder = { Text("What worked, what didn't against ${matchup.opponentName}") },
             maxLines = 4,
             textStyle = MaterialTheme.typography.bodyMedium,
             keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
@@ -573,6 +579,10 @@ private fun RatingCard(
                 onValueChange = { onManual(it.roundToInt()) },
                 valueRange = 1f..MAX_SCORE.toFloat(),
                 steps = MAX_SCORE - 2,
+                modifier = Modifier.semantics {
+                    contentDescription = "Overall score"
+                    stateDescription = ratingState(state.overallManual.coerceIn(1, MAX_SCORE))
+                },
             )
         }
         HorizontalDivider(color = DojoColors.OutlineVariant, modifier = Modifier.padding(vertical = 12.dp))
@@ -610,6 +620,13 @@ private fun CategorySlider(category: RatingCategory, score: Int, onChange: (Int)
             onValueChange = { onChange(it.roundToInt()) },
             valueRange = 0f..MAX_SCORE.toFloat(),
             steps = MAX_SCORE - 1,
+            modifier = Modifier.semantics {
+                contentDescription = category.label
+                stateDescription = ratingState(score)
+            },
         )
     }
 }
+
+/** A 0–10 slider's value in words, so screen readers don't call it a percentage. */
+private fun ratingState(score: Int): String = if (score > 0) "$score out of $MAX_SCORE" else "Not rated"

@@ -12,7 +12,6 @@ import com.dojolog.data.backup.BackupTechniqueEntry
 import com.dojolog.data.backup.ExistingData
 import com.dojolog.data.backup.ExistingOpponent
 import com.dojolog.data.backup.ImportPlan
-import com.dojolog.data.backup.nameKey
 import com.dojolog.data.db.AppDatabase
 import com.dojolog.data.db.OpponentEntity
 import com.dojolog.data.db.SessionEntity
@@ -30,6 +29,7 @@ import com.dojolog.domain.Technique
 import com.dojolog.domain.TechniqueCategory
 import com.dojolog.domain.TechniqueEntry
 import com.dojolog.domain.TrainingSession
+import com.dojolog.domain.nameKey
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob

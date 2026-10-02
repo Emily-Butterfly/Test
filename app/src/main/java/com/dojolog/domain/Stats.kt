@@ -35,6 +35,8 @@ data class PeriodSummary(
     val totalMinutes: Int,
     val averageOverall: Float?,
     val averageMinutes: Int,
+    /** Sessions with an overall rating. */
+    val ratedSessions: Int = 0,
 )
 
 data class TechniqueSummary(
@@ -42,6 +44,8 @@ data class TechniqueSummary(
     val sessions: Int,
     val totalReps: Int,
     val averageQuality: Float?,
+    /** How many practices had a quality rating. */
+    val ratedCount: Int = 0,
     val firstPracticed: LocalDate?,
     val lastPracticed: LocalDate?,
     /** The martial arts it was practised in, most sessions first. */
@@ -192,6 +196,7 @@ object Stats {
             totalMinutes = minutes,
             averageOverall = if (rated.isEmpty()) null else rated.map { it.overall }.average().toFloat(),
             averageMinutes = if (sessions.isEmpty()) 0 else minutes / sessions.size,
+            ratedSessions = rated.size,
         )
     }
 
@@ -418,6 +423,7 @@ object Stats {
             sessions = records.map { it.sessionId }.distinct().size,
             totalReps = records.sumOf { it.reps },
             averageQuality = if (qualities.isEmpty()) null else qualities.average().toFloat(),
+            ratedCount = qualities.size,
             firstPracticed = records.minByOrNull { it.date.toEpochDay() }?.date,
             lastPracticed = records.maxByOrNull { it.date.toEpochDay() }?.date,
             arts = records

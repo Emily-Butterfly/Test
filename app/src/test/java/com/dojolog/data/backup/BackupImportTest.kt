@@ -3,6 +3,7 @@ package com.dojolog.data.backup
 import com.dojolog.domain.MatchResult
 import com.dojolog.domain.Ratings
 import com.dojolog.domain.SessionType
+import com.dojolog.domain.nameKey
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
@@ -172,5 +173,42 @@ class BackupImportTest {
         assertEquals(3, plan.sessions.size)
         assertEquals(3, plan.sessions.map { it.createdAt }.toSet().size)
         assertEquals(mapOf("bjj" to 1), plan.colors)
+    }
+
+    @Test
+    fun namesThatTheDatabaseKeepsApartStayApart() {
+        // The database ignores the case of A–Z only, so these are four different records.
+        val file = backup.copy(
+            techniques = listOf(BackupTechnique(1, "Ō-goshi", notes = "A"), BackupTechnique(2, "ō-goshi", notes = "B"), armbar),
+            opponents = listOf(BackupOpponent(1, "Zoë", club = "Club A"), BackupOpponent(2, "ZOË", club = "Club B")),
+            sessions = listOf(
+                sparring.copy(
+                    techniques = listOf(BackupTechniqueEntry(1), BackupTechniqueEntry(2)),
+                    matchups = listOf(BackupMatchup(1, "win"), BackupMatchup(2, "loss")),
+                ),
+            ),
+        )
+        val plan = BackupImport.plan(file, ExistingData(techniques = setOf("armbar")))
+        assertEquals(listOf("Ō-goshi" to "A", "ō-goshi" to "B"), plan.newTechniques.map { it.name to it.notes })
+        assertEquals(listOf("Zoë" to "Club A", "ZOË" to "Club B"), plan.newOpponents.map { it.name to it.club })
+        val session = plan.sessions.single()
+        assertEquals(listOf("Ō-goshi", "ō-goshi").map(::nameKey), session.techniques.map { it.techniqueKey })
+        assertEquals(listOf("Zoë", "ZOË").map(::nameKey), session.matchups.map { it.opponentKey })
+        // A–Z case still matches, as in the database.
+        assertEquals("armbar", nameKey(" ARMBAR "))
+    }
+
+    @Test
+    fun sessionsWithImpossibleDatesAreLeftOut() {
+        val file = backup.copy(
+            sessions = listOf(
+                sparring.copy(date = "+300000000-01-01", createdAt = 0),
+                sparring.copy(date = "1850-06-01"),
+                boxing,
+            ),
+        )
+        val plan = BackupImport.plan(file, ExistingData())
+        assertEquals(2, plan.invalidSessions)
+        assertEquals(listOf(boxing.createdAt), plan.sessions.map { it.createdAt })
     }
 }

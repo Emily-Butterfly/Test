@@ -234,7 +234,7 @@ private fun OpponentDetailContent(
                     StatTile(
                         label = "Avg rating",
                         value = summary.averageRating?.let { "${Fmt.decimal(it)} / $MAX_SCORE" } ?: "–",
-                        supporting = if (detail.ratingTrend.isEmpty()) "Not rated yet" else Fmt.count(detail.ratingTrend.size, "rating"),
+                        supporting = if (summary.ratedCount == 0) "Not rated yet" else Fmt.count(summary.ratedCount, "rating"),
                         modifier = Modifier.weight(1f),
                     )
                     StatTile(

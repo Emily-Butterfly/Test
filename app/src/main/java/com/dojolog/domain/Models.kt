@@ -11,6 +11,15 @@ const val MAX_QUALITY = 5
 /** Longest session that can be logged. */
 const val MAX_DURATION_MINUTES = 24 * 60
 
+/**
+ * How technique and opponent names are compared: trimmed, ignoring the case of A–Z only.
+ * That is exactly what the database's NOCASE uniqueness does, so "Zoë" and "ZOË" stay two
+ * people everywhere, as they are in the database.
+ */
+fun nameKey(name: String): String = buildString {
+    for (c in name.trim()) append(if (c in 'A'..'Z') c + ('a' - 'A') else c)
+}
+
 enum class SessionType(val key: String, val label: String) {
     CLASS("class", "Class"),
     OPEN_MAT("open_mat", "Open mat"),

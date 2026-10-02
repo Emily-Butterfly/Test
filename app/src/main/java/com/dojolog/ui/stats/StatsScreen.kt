@@ -168,7 +168,7 @@ private fun SummaryTiles(overview: Overview, streaks: Streaks) {
             StatTile(
                 label = "Avg rating",
                 value = summary.averageOverall?.let { "${Fmt.decimal(it)} / $MAX_SCORE" } ?: "–",
-                supporting = Fmt.count(overview.ratingTrend.size, "rated session"),
+                supporting = Fmt.count(summary.ratedSessions, "rated session"),
                 modifier = Modifier.weight(1f),
             )
             StatTile(

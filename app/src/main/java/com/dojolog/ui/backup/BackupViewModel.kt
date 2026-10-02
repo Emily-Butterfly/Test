@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.database.SQLException
 import android.net.Uri
+import android.provider.OpenableColumns
 import androidx.core.content.edit
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -19,6 +20,7 @@ import com.dojolog.data.backup.BackupException
 import com.dojolog.data.backup.BackupFile
 import com.dojolog.ui.Fmt
 import com.dojolog.ui.repository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -72,6 +74,8 @@ class BackupViewModel(
                 message.value = try {
                     val backup = repository.exportBackup(BuildConfig.VERSION_NAME)
                     val bytes = withContext(Dispatchers.Default) { BackupCodec.encode(backup).encodeToByteArray() }
+                    // Never write a file that an import would turn down.
+                    if (bytes.size > BackupCodec.MAX_FILE_BYTES) throw BackupException("Your log is too large to export.")
                     withContext(Dispatchers.IO) { openForWriting(uri).use { it.write(bytes) } }
                     val today = LocalDate.now()
                     prefs.edit { putLong(KEY_LAST_EXPORT, today.toEpochDay()) }
@@ -81,6 +85,8 @@ class BackupViewModel(
                             "${Fmt.count(backup.techniques.size, "technique")} and " +
                             "${Fmt.count(backup.opponents.size, "opponent")}. Keep the file somewhere safe.",
                     )
+                } catch (e: BackupException) {
+                    BackupMessage(e.message ?: "The export failed.", isError = true)
                 } catch (e: IOException) {
                     BackupMessage("The file couldn't be saved. Try again or pick another place.", isError = true)
                 } catch (e: SecurityException) {
@@ -121,6 +127,11 @@ class BackupViewModel(
                 message.value = BackupMessage("The file couldn't be opened. Try picking it again.", isError = true)
             } catch (e: SecurityException) {
                 message.value = BackupMessage("The file couldn't be opened. Try picking it again.", isError = true)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: RuntimeException) {
+                // Anything else in a hand-edited or damaged file must not take the app down.
+                message.value = BackupMessage("This backup file is damaged and can't be read.", isError = true)
             } finally {
                 task.value = null
             }
@@ -172,21 +183,50 @@ class BackupViewModel(
         return truncating ?: resolver.openOutputStream(uri, "w") ?: throw IOException("No stream for $uri")
     }
 
+    /**
+     * Reads the file as text, turning down anything that can't be a backup before buffering
+     * it: files bigger than [BackupCodec.MAX_FILE_BYTES], and files that don't start like JSON.
+     */
     private fun readText(uri: Uri): String {
+        val size = fileSize(uri)
+        if (size != null && size > BackupCodec.MAX_FILE_BYTES) throw BackupException(TOO_BIG)
         val input = resolver.openInputStream(uri) ?: throw IOException("No stream for $uri")
         val bytes = input.use { stream ->
-            val out = ByteArrayOutputStream()
+            val out = ByteArrayOutputStream(size?.toInt()?.coerceAtLeast(0) ?: (64 * 1024))
             val buffer = ByteArray(64 * 1024)
+            var checked = false
             while (true) {
                 val read = stream.read(buffer)
                 if (read < 0) break
+                if (out.size().toLong() + read > BackupCodec.MAX_FILE_BYTES) throw BackupException(TOO_BIG)
                 out.write(buffer, 0, read)
-                if (out.size() > MAX_FILE_BYTES) throw BackupException("This file is too big to be a Dojo Log backup.")
+                if (!checked && out.size() >= MIN_PEEK_BYTES) {
+                    requireJsonStart(out.toByteArray())
+                    checked = true
+                }
             }
-            out.toByteArray()
+            out.toByteArray().also { if (!checked) requireJsonStart(it) }
         }
         // A text editor may have added a byte order mark.
         return bytes.decodeToString().removePrefix("\uFEFF")
+    }
+
+    /** The size the file's provider reports, or null when it doesn't say. */
+    private fun fileSize(uri: Uri): Long? = try {
+        resolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)?.use { cursor ->
+            val column = cursor.getColumnIndex(OpenableColumns.SIZE)
+            if (column >= 0 && cursor.moveToFirst() && !cursor.isNull(column)) cursor.getLong(column) else null
+        }
+    } catch (e: RuntimeException) {
+        null
+    }
+
+    /** An export starts with "{", possibly after a byte order mark and white space. */
+    private fun requireJsonStart(bytes: ByteArray) {
+        var i = 0
+        if (bytes.size >= 3 && bytes[0] == 0xEF.toByte() && bytes[1] == 0xBB.toByte() && bytes[2] == 0xBF.toByte()) i = 3
+        while (i < bytes.size && bytes[i].toInt().toChar().isWhitespace()) i++
+        if (i >= bytes.size || bytes[i] != '{'.code.toByte()) throw BackupException(BackupCodec.NOT_A_BACKUP)
     }
 
     private fun summary(result: ImportResult, replace: Boolean): String {
@@ -205,7 +245,8 @@ class BackupViewModel(
 
     companion object {
         private const val KEY_LAST_EXPORT = "last_export_day"
-        private const val MAX_FILE_BYTES = 64 * 1024 * 1024
+        private const val MIN_PEEK_BYTES = 1024
+        private const val TOO_BIG = "This file is too big to be a Dojo Log backup."
 
         /** Suggested name for an export made on [date]. */
         fun fileName(date: LocalDate): String = "dojo-log-$date.json"

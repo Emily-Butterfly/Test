@@ -52,6 +52,8 @@ data class OpponentSummary(
     val record: MatchRecord,
     /** Mean of the rated matchups, or null when none is rated. */
     val averageRating: Float?,
+    /** How many matchups were rated. */
+    val ratedCount: Int,
     val firstFaced: LocalDate?,
     val lastFaced: LocalDate?,
     /** The martial arts you faced them in, most sessions first. */
@@ -133,6 +135,7 @@ object OpponentStats {
             opponent = opponent,
             record = MatchRecord.of(records.map { it.result }),
             averageRating = if (ratings.isEmpty()) null else ratings.average().toFloat(),
+            ratedCount = ratings.size,
             firstFaced = records.firstOrNull()?.date,
             lastFaced = records.lastOrNull()?.date,
             arts = records

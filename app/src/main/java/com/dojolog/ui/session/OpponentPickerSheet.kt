@@ -39,10 +39,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
+import com.dojolog.domain.MatchRecord
 import com.dojolog.domain.Opponent
 import com.dojolog.domain.OpponentSummary
+import com.dojolog.domain.nameKey
 import com.dojolog.ui.Fmt
 import com.dojolog.ui.theme.DojoColors
 
@@ -67,7 +71,7 @@ fun OpponentPickerSheet(
     val matches = remember(opponents, trimmed) {
         if (trimmed.isEmpty()) opponents else opponents.filter { it.opponent.name.contains(trimmed, ignoreCase = true) }
     }
-    val exactMatch = opponents.any { it.opponent.name.equals(trimmed, ignoreCase = true) }
+    val exactMatch = opponents.any { nameKey(it.opponent.name) == nameKey(trimmed) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -143,7 +147,14 @@ fun OpponentPickerSheet(
                     val added = addedCounts[summary.opponent.id] ?: 0
                     ListItem(
                         headlineContent = { Text(summary.opponent.name) },
-                        supportingContent = { Text(pickerDetails(summary)) },
+                        supportingContent = {
+                            Text(
+                                pickerDetails(summary, Fmt::record),
+                                modifier = Modifier.clearAndSetSemantics {
+                                    contentDescription = pickerDetails(summary, Fmt::recordSpoken)
+                                },
+                            )
+                        },
                         trailingContent = {
                             if (added > 0) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -166,10 +177,13 @@ fun OpponentPickerSheet(
     }
 }
 
-/** "Gracie Barra · 3W 1L 1D" — what helps tell people apart, then the record so far. */
-private fun pickerDetails(summary: OpponentSummary): String {
+/**
+ * "Gracie Barra · 3W 1L 1D": what helps tell people apart, then the record so far, written
+ * by [record] (short on screen, in words for screen readers).
+ */
+private fun pickerDetails(summary: OpponentSummary, record: (MatchRecord) -> String): String {
     val opponent = summary.opponent
     val about = listOf(opponent.club, opponent.grade).filter { it.isNotBlank() }
-    val record = if (summary.record.matchups == 0) "Not faced yet" else Fmt.record(summary.record)
-    return (about + record).joinToString(" · ")
+    val result = if (summary.record.matchups == 0) "Not faced yet" else record(summary.record)
+    return (about + result).joinToString(" · ")
 }

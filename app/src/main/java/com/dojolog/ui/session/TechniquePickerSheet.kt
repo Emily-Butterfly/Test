@@ -50,6 +50,7 @@ import com.dojolog.domain.ArtCount
 import com.dojolog.domain.Technique
 import com.dojolog.domain.TechniqueCategory
 import com.dojolog.domain.disciplineKey
+import com.dojolog.domain.nameKey
 import com.dojolog.ui.theme.DojoColors
 
 /**
@@ -90,7 +91,7 @@ fun TechniquePickerSheet(
     val others = remember(found, practised) {
         if (practised.isEmpty()) found else practised.map { it.id }.toSet().let { ids -> found.filter { it.id !in ids } }
     }
-    val exactMatch = library.any { it.name.equals(trimmed, ignoreCase = true) }
+    val exactMatch = library.any { nameKey(it.name) == nameKey(trimmed) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,

@@ -7,12 +7,10 @@ import com.dojolog.domain.MatchResult
 import com.dojolog.domain.Ratings
 import com.dojolog.domain.SessionType
 import com.dojolog.domain.TechniqueCategory
+import com.dojolog.domain.nameKey
 import java.time.LocalDate
 import java.time.ZoneOffset
 import java.time.format.DateTimeParseException
-
-/** How techniques and opponents are matched between a backup and the app: by name, ignoring case. */
-fun nameKey(name: String): String = name.trim().lowercase()
 
 /** An opponent already in the app, with the details an import may fill in. */
 data class ExistingOpponent(
@@ -78,6 +76,8 @@ data class ImportPlan(
  */
 object BackupImport {
     private const val MAX_REPS = 99_999
+    private const val MIN_YEAR = 1900
+    private const val MAX_YEAR = 2100
 
     fun plan(backup: BackupFile, existing: ExistingData): ImportPlan {
         val techniqueKeys = HashMap<Long, String>()
@@ -135,6 +135,10 @@ object BackupImport {
             val date = try {
                 LocalDate.parse(session.date.trim())
             } catch (e: DateTimeParseException) {
+                null
+            }
+            // The editor's date picker can't go outside these years; anything else is damage.
+            if (date == null || date.year !in MIN_YEAR..MAX_YEAR) {
                 invalid++
                 return@forEachIndexed
             }

@@ -209,7 +209,7 @@ private fun TechniqueDetailContent(
                         label = "Avg quality",
                         value = summary.averageQuality?.let { "${Fmt.decimal(it)} / $MAX_QUALITY" } ?: "–",
                         supporting = if (detail.qualityTrend.isEmpty()) "Not rated yet" else {
-                            Fmt.count(detail.qualityTrend.size, "rating")
+                            Fmt.count(summary.ratedCount, "rating")
                         },
                         modifier = Modifier.weight(1f),
                     )

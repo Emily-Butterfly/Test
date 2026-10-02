@@ -60,6 +60,8 @@ fun SectionCard(
     modifier: Modifier = Modifier,
     title: String? = null,
     subtitle: String? = null,
+    /** What a screen reader says for [subtitle], when the text alone reads badly (e.g. "2W 1L 0D"). */
+    subtitleDescription: String? = null,
     action: (@Composable () -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
@@ -74,7 +76,16 @@ fun SectionCard(
                     Column(Modifier.weight(1f)) {
                         Text(title, style = MaterialTheme.typography.titleMedium)
                         if (subtitle != null) {
-                            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = DojoColors.TextMuted)
+                            Text(
+                                subtitle,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = DojoColors.TextMuted,
+                                modifier = if (subtitleDescription != null) {
+                                    Modifier.clearAndSetSemantics { contentDescription = subtitleDescription }
+                                } else {
+                                    Modifier
+                                },
+                            )
                         }
                     }
                     action?.invoke()

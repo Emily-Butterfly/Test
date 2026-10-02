@@ -100,13 +100,30 @@ data class BackupMatchup(
 class BackupException(message: String, cause: Throwable? = null) : Exception(message, cause)
 
 object BackupCodec {
+    /**
+     * Largest file an import reads: room for tens of thousands of sessions, while a wrong
+     * file (a video, say) is turned down before it fills the memory.
+     */
+    const val MAX_FILE_BYTES = 32 * 1024 * 1024
+
+    const val NOT_A_BACKUP = "This file isn't a Dojo Log backup."
+
     private val json = Json {
         prettyPrint = true
         encodeDefaults = true
         ignoreUnknownKeys = true
     }
 
-    fun encode(backup: BackupFile): String = json.encodeToString(BackupFile.serializer(), backup)
+    private val compactJson = Json(from = json) { prettyPrint = false }
+
+    /**
+     * Indented so a person can read it; a very large log is written without indentation so
+     * its file stays well inside [MAX_FILE_BYTES].
+     */
+    fun encode(backup: BackupFile): String {
+        val pretty = json.encodeToString(BackupFile.serializer(), backup)
+        return if (pretty.length > MAX_FILE_BYTES / 4) compactJson.encodeToString(BackupFile.serializer(), backup) else pretty
+    }
 
     /** Reads an export file, or throws [BackupException] when it isn't one this app can read. */
     fun decode(text: String): BackupFile {
@@ -131,6 +148,4 @@ object BackupCodec {
             throw BackupException("This backup file is damaged and can't be read.", e)
         }
     }
-
-    private const val NOT_A_BACKUP = "This file isn't a Dojo Log backup."
 }
