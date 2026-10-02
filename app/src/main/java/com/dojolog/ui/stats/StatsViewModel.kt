@@ -9,6 +9,7 @@ import com.dojolog.domain.Overview
 import com.dojolog.domain.Stats
 import com.dojolog.domain.StatsPeriod
 import com.dojolog.domain.Streaks
+import com.dojolog.domain.disciplineKey
 import com.dojolog.ui.firstDayOfWeek
 import com.dojolog.ui.repository
 import kotlinx.coroutines.Dispatchers
@@ -27,22 +28,31 @@ data class StatsUiState(
     val streaks: Streaks = Streaks(0, 0),
     val hasSessions: Boolean = false,
     val today: LocalDate = LocalDate.now(),
+    /** Martial art ([com.dojolog.domain.disciplineKey]) the top techniques are limited to; null for all. */
+    val techniqueArt: String? = null,
 )
 
 class StatsViewModel(repository: TrainingRepository) : ViewModel() {
     private val today = LocalDate.now()
     private val weekStart = firstDayOfWeek()
     private val period = MutableStateFlow(StatsPeriod.DAYS_90)
+    private val techniqueArt = MutableStateFlow<String?>(null)
 
     val state: StateFlow<StatsUiState> = combine(
         repository.observeSessions(),
         repository.observeTechniques(),
         period,
-    ) { sessions, techniques, period ->
+        techniqueArt,
+    ) { sessions, techniques, period, techniqueArt ->
+        // An art not trained in this period falls back to all arts; the choice is kept for
+        // when a period that has it is picked again.
+        val artsInPeriod = Stats.inPeriod(sessions, period, today).map { disciplineKey(it.discipline) }.toSet()
+        val art = techniqueArt?.takeIf { it in artsInPeriod }
         StatsUiState(
             loading = false,
             period = period,
-            overview = Stats.overview(sessions, techniques, period, today, weekStart),
+            overview = Stats.overview(sessions, techniques, period, today, weekStart, techniqueArt = art),
+            techniqueArt = art,
             streaks = Stats.streaks(sessions.map { it.date }, today, weekStart),
             hasSessions = sessions.isNotEmpty(),
             today = today,
@@ -53,6 +63,10 @@ class StatsViewModel(repository: TrainingRepository) : ViewModel() {
 
     fun setPeriod(value: StatsPeriod) {
         period.value = value
+    }
+
+    fun setTechniqueArt(key: String?) {
+        techniqueArt.value = key
     }
 
     companion object {

@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Star
@@ -44,6 +45,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.dojolog.domain.ArtCount
 import com.dojolog.domain.MAX_QUALITY
 import com.dojolog.domain.MAX_SCORE
 import com.dojolog.domain.Stats
@@ -339,6 +341,39 @@ fun EmptyState(
         if (action != null) {
             Spacer(Modifier.height(16.dp))
             action()
+        }
+    }
+}
+
+/**
+ * The martial arts a technique was practised in, each with its colour; with [showCounts]
+ * the number of sessions follows each name.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun ArtTags(arts: List<ArtCount>, modifier: Modifier = Modifier, showCounts: Boolean = false) {
+    if (arts.isEmpty()) return
+    val colors = LocalDisciplineColors.current
+    FlowRow(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        arts.forEach { art ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(colors.rampForKey(art.key).identity),
+                )
+                Spacer(Modifier.size(5.dp))
+                Text(
+                    if (showCounts) "${art.name} · ${Fmt.count(art.sessions, "session")}" else art.name,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = DojoColors.TextSecondary,
+                )
+            }
         }
     }
 }

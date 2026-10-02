@@ -10,18 +10,23 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.dojolog.data.TrainingRepository
+import com.dojolog.domain.ArtCount
 import com.dojolog.domain.MAX_SCORE
 import com.dojolog.domain.RatingCategory
 import com.dojolog.domain.Ratings
 import com.dojolog.domain.SessionType
+import com.dojolog.domain.Stats
 import com.dojolog.domain.Technique
 import com.dojolog.domain.TechniqueCategory
 import com.dojolog.domain.TechniqueEntry
 import com.dojolog.domain.TrainingSession
 import com.dojolog.ui.repository
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -70,6 +75,14 @@ class SessionEditorViewModel(
 
     val library: StateFlow<List<Technique>> =
         repository.observeTechniques().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /** The martial arts each technique was practised in, for the technique picker. */
+    val techniqueArts: StateFlow<Map<Long, List<ArtCount>>> =
+        combine(repository.observeTechniques(), repository.observeSessions()) { techniques, sessions ->
+            Stats.techniqueSummaries(techniques, sessions).associate { it.technique.id to it.arts }
+        }
+            .flowOn(Dispatchers.Default)
+            .stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
 
     val recentDisciplines: StateFlow<List<String>> =
         repository.observeRecentDisciplines().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())

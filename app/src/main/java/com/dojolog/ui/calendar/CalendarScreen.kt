@@ -122,6 +122,7 @@ fun CalendarScreen(
                     MonthGrid(
                         month = state.month,
                         gridStart = state.gridStart,
+                        gridEnd = state.gridEnd,
                         selected = state.selected,
                         today = state.today,
                         days = state.days,
@@ -208,13 +209,14 @@ private fun MonthHeader(month: YearMonth, onPrevious: () -> Unit, onNext: () -> 
 }
 
 /**
- * The month as weeks. The first row also shows the end of the previous month (dimmed);
- * tapping one of those days opens that month.
+ * The month as whole weeks: the first and last rows also show the neighbouring months'
+ * days (dimmed), and tapping one of those days opens its month.
  */
 @Composable
 private fun MonthGrid(
     month: YearMonth,
     gridStart: LocalDate,
+    gridEnd: LocalDate,
     selected: LocalDate,
     today: LocalDate,
     days: Map<LocalDate, DayInfo>,
@@ -226,10 +228,7 @@ private fun MonthGrid(
 ) {
     val weekdays = remember(firstDayOfWeek) { (0L until 7L).map { firstDayOfWeek.plus(it) } }
     val locale = Locale.getDefault()
-    val firstOfMonth = month.atDay(1)
-    val lastOfMonth = month.atEndOfMonth()
-    val cells = ChronoUnit.DAYS.between(gridStart, lastOfMonth).toInt() + 1
-    val rows = (cells + 6) / 7
+    val rows = (ChronoUnit.DAYS.between(gridStart, gridEnd).toInt() + 1) / 7
 
     Column(
         Modifier.pointerInput(Unit) {
@@ -271,18 +270,20 @@ private fun MonthGrid(
                             .aspectRatio(1f)
                             .padding(2.dp),
                     ) {
-                        if (!date.isAfter(lastOfMonth)) {
-                            DayCell(
-                                date = date,
-                                info = days[date],
-                                names = names,
-                                isSelected = date == selected,
-                                isToday = date == today,
-                                isFuture = date.isAfter(today),
-                                isPreviousMonth = date.isBefore(firstOfMonth),
-                                onClick = { onSelect(date) },
-                            )
-                        }
+                        DayCell(
+                            date = date,
+                            info = days[date],
+                            names = names,
+                            isSelected = date == selected,
+                            isToday = date == today,
+                            isFuture = date.isAfter(today),
+                            otherMonth = when {
+                                date.isBefore(month.atDay(1)) -> "previous month"
+                                date.isAfter(month.atEndOfMonth()) -> "next month"
+                                else -> null
+                            },
+                            onClick = { onSelect(date) },
+                        )
                     }
                 }
             }
@@ -298,7 +299,8 @@ private fun DayCell(
     isSelected: Boolean,
     isToday: Boolean,
     isFuture: Boolean,
-    isPreviousMonth: Boolean,
+    /** "previous month" or "next month" for the neighbouring days, else null. */
+    otherMonth: String?,
     onClick: () -> Unit,
 ) {
     val colors = LocalDisciplineColors.current
@@ -309,7 +311,7 @@ private fun DayCell(
     val textColor = when {
         solidFill -> colors.rampForKey(single!!.disciplineKey).ink(single.level)
         marks.isNotEmpty() -> DojoColors.TextPrimary
-        isFuture || isPreviousMonth -> DojoColors.TextMuted
+        isFuture || otherMonth != null -> DojoColors.TextMuted
         else -> DojoColors.TextSecondary
     }
     // Stripes and hatching mix light and dark under the number, so give it a halo.
@@ -321,7 +323,7 @@ private fun DayCell(
     val description = buildString {
         append(Fmt.fullDate(date))
         if (isToday) append(", today")
-        if (isPreviousMonth) append(", previous month")
+        if (otherMonth != null) append(", ").append(otherMonth)
         if (info == null) {
             append(", no training")
         } else {
@@ -335,7 +337,7 @@ private fun DayCell(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .alpha(if (isPreviousMonth) 0.45f else 1f)
+            .alpha(if (otherMonth != null) 0.45f else 1f)
             .clip(shape)
             .then(
                 when {

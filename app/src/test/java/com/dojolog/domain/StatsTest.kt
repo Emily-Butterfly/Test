@@ -274,4 +274,58 @@ class StatsTest {
         // June 2026 starts on a Monday: no days from May are shown.
         assertEquals(LocalDate.of(2026, 6, 1), Stats.calendarGridStart(java.time.YearMonth.of(2026, 6), DayOfWeek.MONDAY))
     }
+
+    @Test
+    fun techniquesRecordTheMartialArtsTheyWerePractisedIn() {
+        val sessions = listOf(
+            session(1, today.minusDays(9), discipline = "Judo", techniques = listOf(entry(armbar))),
+            session(2, today.minusDays(5), discipline = "BJJ", techniques = listOf(entry(armbar), entry(jab))),
+            session(3, today, discipline = "bjj ", techniques = listOf(entry(armbar))),
+            session(4, today, discipline = "", techniques = listOf(entry(jab))),
+        )
+        val summaries = Stats.techniqueSummaries(listOf(armbar, jab), sessions).associateBy { it.technique.id }
+        // Most sessions first; names as first written; unnamed sessions are left out.
+        assertEquals(listOf(ArtCount("bjj", "BJJ", 2), ArtCount("judo", "Judo", 1)), summaries.getValue(armbar.id).arts)
+        assertEquals(listOf(ArtCount("bjj", "BJJ", 1)), summaries.getValue(jab.id).arts)
+    }
+
+    @Test
+    fun topTechniquesCanBeLimitedToOneMartialArt() {
+        val sessions = listOf(
+            session(1, today, discipline = "Muay Thai", techniques = listOf(entry(jab, reps = 10))),
+            session(2, today, discipline = "Muay Thai", techniques = listOf(entry(jab, reps = 10))),
+            session(3, today, discipline = "BJJ", techniques = listOf(entry(armbar))),
+            session(4, today, discipline = "BJJ", techniques = listOf(entry(armbar), entry(jab))),
+            session(5, today, discipline = "BJJ", techniques = listOf(entry(armbar))),
+        )
+        // Unfiltered both appear in three sessions; the jab wins the tie on reps.
+        assertEquals(listOf("Jab", "Armbar"), Stats.topTechniques(listOf(armbar, jab), sessions).map { it.technique.name })
+        val muayThai = Stats.topTechniques(listOf(armbar, jab), sessions, artKey = "muay thai")
+        assertEquals(listOf("Jab" to 2), muayThai.map { it.technique.name to it.sessions })
+        val bjj = Stats.topTechniques(listOf(armbar, jab), sessions, artKey = "bjj")
+        assertEquals(listOf("Armbar" to 3, "Jab" to 1), bjj.map { it.technique.name to it.sessions })
+        assertEquals(emptyList<TechniqueSummary>(), Stats.topTechniques(listOf(armbar, jab), sessions, artKey = "judo"))
+
+        val overview = Stats.overview(sessions, listOf(armbar, jab), StatsPeriod.ALL, today, DayOfWeek.MONDAY, techniqueArt = "bjj")
+        assertEquals(listOf("Armbar", "Jab"), overview.topTechniques.map { it.technique.name })
+        assertEquals(1, overview.topTechniques.last().sessions)
+    }
+
+    @Test
+    fun calendarGridEndsOnTheWeekOfTheLastDay() {
+        // October 2026 ends on a Saturday.
+        val october = java.time.YearMonth.of(2026, 10)
+        assertEquals(LocalDate.of(2026, 11, 1), Stats.calendarGridEnd(october, DayOfWeek.MONDAY))
+        assertEquals(LocalDate.of(2026, 10, 31), Stats.calendarGridEnd(october, DayOfWeek.SUNDAY))
+        // Every grid is whole weeks.
+        for (first in DayOfWeek.values()) {
+            for (m in 1..12) {
+                val month = java.time.YearMonth.of(2026, m)
+                val days = java.time.temporal.ChronoUnit.DAYS.between(
+                    Stats.calendarGridStart(month, first), Stats.calendarGridEnd(month, first),
+                ) + 1
+                assertEquals(0L, days % 7)
+            }
+        }
+    }
 }

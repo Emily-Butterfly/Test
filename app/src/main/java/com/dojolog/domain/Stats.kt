@@ -44,7 +44,12 @@ data class TechniqueSummary(
     val averageQuality: Float?,
     val firstPracticed: LocalDate?,
     val lastPracticed: LocalDate?,
+    /** The martial arts it was practised in, most sessions first. */
+    val arts: List<ArtCount> = emptyList(),
 )
+
+/** How many sessions of one martial art ([key] is its [disciplineKey]) included a technique. */
+data class ArtCount(val key: String, val name: String, val sessions: Int)
 
 /** One time a technique was practised. */
 data class PracticeRecord(
@@ -140,6 +145,10 @@ object Stats {
     /** First day shown in a month grid: the start of the week containing the 1st. */
     fun calendarGridStart(month: YearMonth, firstDayOfWeek: DayOfWeek): LocalDate =
         weekStart(month.atDay(1), firstDayOfWeek)
+
+    /** Last day shown in a month grid: the end of the week containing the last day. */
+    fun calendarGridEnd(month: YearMonth, firstDayOfWeek: DayOfWeek): LocalDate =
+        weekStart(month.atEndOfMonth(), firstDayOfWeek).plusDays(6)
 
     fun summarize(sessions: List<TrainingSession>): PeriodSummary {
         val rated = sessions.filter { it.isRated }
@@ -273,22 +282,38 @@ object Stats {
         )
     }
 
-    fun overview(
-        sessions: List<TrainingSession>,
+    /**
+     * The techniques practised in the most sessions, optionally only counting sessions of
+     * one martial art ([artKey] is its [disciplineKey]).
+     */
+    fun topTechniques(
         techniques: List<Technique>,
-        period: StatsPeriod,
-        today: LocalDate,
-        firstDayOfWeek: DayOfWeek,
-    ): Overview {
-        val selected = inPeriod(sessions, period, today)
-        val top = techniqueSummaries(techniques, selected)
+        sessions: List<TrainingSession>,
+        artKey: String? = null,
+        limit: Int = 5,
+    ): List<TechniqueSummary> {
+        val counted = if (artKey == null) sessions else sessions.filter { disciplineKey(it.discipline) == artKey }
+        return techniqueSummaries(techniques, counted)
             .filter { it.sessions > 0 }
             .sortedWith(
                 compareByDescending<TechniqueSummary> { it.sessions }
                     .thenByDescending { it.totalReps }
                     .thenBy { it.technique.name.lowercase() },
             )
-            .take(5)
+            .take(limit)
+    }
+
+    /** [techniqueArt] limits the top techniques to one martial art; null counts every art. */
+    fun overview(
+        sessions: List<TrainingSession>,
+        techniques: List<Technique>,
+        period: StatsPeriod,
+        today: LocalDate,
+        firstDayOfWeek: DayOfWeek,
+        techniqueArt: String? = null,
+    ): Overview {
+        val selected = inPeriod(sessions, period, today)
+        val top = topTechniques(techniques, selected, techniqueArt)
         val disciplines = selected
             .groupBy { disciplineKey(it.discipline) }
             .map { (key, group) ->
@@ -340,6 +365,17 @@ object Stats {
             averageQuality = if (qualities.isEmpty()) null else qualities.average().toFloat(),
             firstPracticed = records.minByOrNull { it.date.toEpochDay() }?.date,
             lastPracticed = records.maxByOrNull { it.date.toEpochDay() }?.date,
+            arts = records
+                .groupBy { disciplineKey(it.discipline) }
+                .filterKeys { it.isNotEmpty() }
+                .map { (key, group) ->
+                    ArtCount(
+                        key = key,
+                        name = group.minBy { it.date.toEpochDay() }.discipline.trim(),
+                        sessions = group.map { it.sessionId }.distinct().size,
+                    )
+                }
+                .sortedWith(compareByDescending<ArtCount> { it.sessions }.thenBy { it.key }),
         )
     }
 

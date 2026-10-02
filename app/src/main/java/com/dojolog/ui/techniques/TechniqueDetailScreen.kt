@@ -45,6 +45,7 @@ import com.dojolog.domain.PracticeRecord
 import com.dojolog.domain.Technique
 import com.dojolog.domain.TechniqueDetail
 import com.dojolog.ui.Fmt
+import com.dojolog.ui.components.ArtTags
 import com.dojolog.ui.components.BarChart
 import com.dojolog.ui.components.ChartBar
 import com.dojolog.ui.components.ChartPoint
@@ -177,6 +178,7 @@ private fun TechniqueDetailContent(
         item {
             Column(Modifier.padding(horizontal = 4.dp)) {
                 Text(technique.category.label, style = MaterialTheme.typography.labelLarge, color = DojoColors.Primary)
+                ArtTags(summary.arts, showCounts = true, modifier = Modifier.padding(vertical = 6.dp))
                 if (technique.notes.isNotBlank()) {
                     Text(technique.notes, style = MaterialTheme.typography.bodyMedium, color = DojoColors.TextSecondary)
                 }

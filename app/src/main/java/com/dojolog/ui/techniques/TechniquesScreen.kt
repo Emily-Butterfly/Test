@@ -51,6 +51,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dojolog.domain.MAX_QUALITY
 import com.dojolog.domain.TechniqueSummary
 import com.dojolog.ui.Fmt
+import com.dojolog.ui.components.ArtTags
 import com.dojolog.ui.components.EmptyState
 import com.dojolog.ui.components.StarRating
 import com.dojolog.ui.theme.DojoColors
@@ -216,6 +217,7 @@ private fun TechniqueRow(summary: TechniqueSummary, today: LocalDate, onClick: (
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(summary.technique.category.label, style = MaterialTheme.typography.bodySmall, color = DojoColors.TextMuted)
+                ArtTags(summary.arts, modifier = Modifier.padding(top = 4.dp))
                 Spacer(Modifier.height(4.dp))
                 Text(
                     statsLine(summary, today),

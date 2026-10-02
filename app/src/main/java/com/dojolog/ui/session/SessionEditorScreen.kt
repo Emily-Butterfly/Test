@@ -75,7 +75,7 @@ import com.dojolog.ui.theme.DojoColors
 import java.time.LocalDate
 import kotlin.math.roundToInt
 
-private val QUICK_DURATIONS = listOf(30 to "30m", 45 to "45m", 60 to "1h", 90 to "1.5h", 120 to "2h")
+private val QUICK_DURATIONS = listOf(30 to "30m", 45 to "45m", 60 to "1h", 75 to "1h15", 90 to "1h30", 120 to "2h")
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -85,6 +85,7 @@ fun SessionEditorScreen(
 ) {
     val state = viewModel.state
     val library by viewModel.library.collectAsStateWithLifecycle()
+    val techniqueArts by viewModel.techniqueArts.collectAsStateWithLifecycle()
     val disciplines by viewModel.recentDisciplines.collectAsStateWithLifecycle()
     var showDatePicker by rememberSaveable { mutableStateOf(false) }
     var showTechniquePicker by rememberSaveable { mutableStateOf(false) }
@@ -203,6 +204,8 @@ fun SessionEditorScreen(
     if (showTechniquePicker) {
         TechniquePickerSheet(
             library = library,
+            arts = techniqueArts,
+            sessionArt = state.discipline,
             alreadyAdded = state.techniques.map { it.techniqueId }.toSet(),
             onPick = viewModel::addTechnique,
             onCreate = viewModel::createAndAddTechnique,

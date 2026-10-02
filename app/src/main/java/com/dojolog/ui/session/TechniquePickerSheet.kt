@@ -44,18 +44,24 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
+import com.dojolog.domain.ArtCount
 import com.dojolog.domain.Technique
 import com.dojolog.domain.TechniqueCategory
+import com.dojolog.domain.disciplineKey
 import com.dojolog.ui.theme.DojoColors
 
 /**
  * Search the technique library and add entries to the session; typing a new name offers to
- * create it. Stays open so several techniques can be added in a row.
+ * create it. Techniques already practised in this session's martial art ([sessionArt]) come
+ * first, and every technique shows the arts it was practised in. Stays open so several
+ * techniques can be added in a row.
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun TechniquePickerSheet(
     library: List<Technique>,
+    arts: Map<Long, List<ArtCount>>,
+    sessionArt: String,
     alreadyAdded: Set<Long>,
     onPick: (Technique) -> Unit,
     onCreate: (String, TechniqueCategory) -> Unit,
@@ -65,8 +71,11 @@ fun TechniquePickerSheet(
     var query by rememberSaveable { mutableStateOf("") }
     var newCategory by rememberSaveable { mutableStateOf(TechniqueCategory.OTHER) }
     val trimmed = query.trim()
-    val matches = remember(library, trimmed) {
-        if (trimmed.isEmpty()) library else library.filter { it.name.contains(trimmed, ignoreCase = true) }
+    val artKey = disciplineKey(sessionArt)
+    val matches = remember(library, arts, artKey, trimmed) {
+        val found = if (trimmed.isEmpty()) library else library.filter { it.name.contains(trimmed, ignoreCase = true) }
+        // Most practised in this art first; the rest keep the library's A–Z order.
+        found.sortedByDescending { technique -> arts[technique.id]?.firstOrNull { it.key == artKey }?.sessions ?: 0 }
     }
     val exactMatch = library.any { it.name.equals(trimmed, ignoreCase = true) }
 
@@ -150,7 +159,13 @@ fun TechniquePickerSheet(
                     val added = technique.id in alreadyAdded
                     ListItem(
                         headlineContent = { Text(technique.name) },
-                        supportingContent = { Text(technique.category.label) },
+                        supportingContent = {
+                            val practisedIn = arts[technique.id].orEmpty().joinToString(", ") { it.name }
+                            Text(
+                                if (practisedIn.isEmpty()) technique.category.label
+                                else "${technique.category.label} · $practisedIn",
+                            )
+                        },
                         trailingContent = {
                             if (added) Icon(Icons.Filled.Check, contentDescription = "Added", tint = DojoColors.Primary)
                         },

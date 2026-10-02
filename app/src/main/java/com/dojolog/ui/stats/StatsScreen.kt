@@ -1,13 +1,19 @@
 package com.dojolog.ui.stats
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Insights
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -21,6 +27,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -95,7 +102,14 @@ fun StatsScreen(
                 item(key = "activity") { ActivityCard(overview) }
                 item(key = "trend") { RatingTrendCard(overview) }
                 item(key = "breakdown") { BreakdownCard(overview) }
-                item(key = "techniques") { TopTechniquesCard(overview, onOpenTechnique) }
+                item(key = "techniques") {
+                    TopTechniquesCard(
+                        overview = overview,
+                        selectedArt = state.techniqueArt,
+                        onSelectArt = viewModel::setTechniqueArt,
+                        onOpenTechnique = onOpenTechnique,
+                    )
+                }
                 if (overview.disciplines.size > 1) {
                     item(key = "disciplines") { DisciplinesCard(overview) }
                 }
@@ -220,21 +234,61 @@ private fun BreakdownCard(overview: Overview) {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun TopTechniquesCard(overview: Overview, onOpenTechnique: (Long) -> Unit) {
+private fun TopTechniquesCard(
+    overview: Overview,
+    selectedArt: String?,
+    onSelectArt: (String?) -> Unit,
+    onOpenTechnique: (Long) -> Unit,
+) {
+    val arts = overview.disciplines.filter { it.key.isNotEmpty() }
+    val selectedName = arts.firstOrNull { it.key == selectedArt }?.name
     SectionCard(
         modifier = Modifier.padding(horizontal = 16.dp),
         title = "Most practised techniques",
-        subtitle = "By number of sessions",
+        subtitle = if (selectedName != null) "Sessions of $selectedName" else "By number of sessions",
     ) {
+        if (arts.size > 1) {
+            // Filter by martial art: counts only the sessions of that art.
+            val colors = LocalDisciplineColors.current
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(bottom = 8.dp),
+            ) {
+                FilterChip(
+                    selected = selectedArt == null,
+                    onClick = { onSelectArt(null) },
+                    label = { Text("All arts") },
+                )
+                arts.forEach { art ->
+                    FilterChip(
+                        selected = selectedArt == art.key,
+                        onClick = { onSelectArt(if (selectedArt == art.key) null else art.key) },
+                        label = { Text(art.name) },
+                        leadingIcon = {
+                            Box(
+                                Modifier
+                                    .size(10.dp)
+                                    .clip(CircleShape)
+                                    .background(colors.rampForKey(art.key).identity),
+                            )
+                        },
+                    )
+                }
+            }
+        }
         if (overview.topTechniques.isEmpty()) {
             Text(
-                "No techniques logged in this period.",
+                if (selectedName != null) "No techniques logged for $selectedName in this period."
+                else "No techniques logged in this period.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = DojoColors.TextSecondary,
             )
         }
         val most = overview.topTechniques.maxOfOrNull { it.sessions } ?: 1
+        // Filtered to one art, the bars take that art's colour.
+        val barColor = selectedArt?.let { LocalDisciplineColors.current.rampForKey(it).identity } ?: DojoColors.ChartSeries
         overview.topTechniques.forEach { summary ->
             MeterRow(
                 label = summary.technique.name,
@@ -245,6 +299,7 @@ private fun TopTechniquesCard(overview: Overview, onOpenTechnique: (Long) -> Uni
                     summary.totalReps.takeIf { it > 0 }?.let { Fmt.count(it, "rep") },
                     summary.averageQuality?.let { "quality ${Fmt.decimal(it)}/5" },
                 ).joinToString(" · "),
+                color = barColor,
                 onClick = { onOpenTechnique(summary.technique.id) },
             )
         }

@@ -38,6 +38,8 @@ data class CalendarUiState(
     val firstDayOfWeek: DayOfWeek,
     /** First cell of the grid: the 1st, or the start of its week in the previous month. */
     val gridStart: LocalDate = Stats.calendarGridStart(month, firstDayOfWeek),
+    /** Last cell of the grid: the last day, or the end of its week in the next month. */
+    val gridEnd: LocalDate = Stats.calendarGridEnd(month, firstDayOfWeek),
     /** Days with training, for every date shown in the grid. */
     val days: Map<LocalDate, DayInfo> = emptyMap(),
     /** The martial arts trained on the days shown, in colour-slot order. */
@@ -59,7 +61,8 @@ class CalendarViewModel(repository: TrainingRepository) : ViewModel() {
             val inMonth = sessions.filter { YearMonth.from(it.date) == month }
             val slots = Stats.disciplineSlots(sessions)
             val gridStart = Stats.calendarGridStart(month, weekStart)
-            val shown = sessions.filter { !it.date.isBefore(gridStart) && !it.date.isAfter(month.atEndOfMonth()) }
+            val gridEnd = Stats.calendarGridEnd(month, weekStart)
+            val shown = sessions.filter { !it.date.isBefore(gridStart) && !it.date.isAfter(gridEnd) }
             // Paging to another month moves the selection there: today, else the latest
             // training day, else the 1st. Coming back restores the explicit selection.
             val effectiveSelection = when {
@@ -73,6 +76,7 @@ class CalendarViewModel(repository: TrainingRepository) : ViewModel() {
                 today = today,
                 firstDayOfWeek = weekStart,
                 gridStart = gridStart,
+                gridEnd = gridEnd,
                 days = shown.groupBy { it.date }.mapValues { (_, daySessions) ->
                     DayInfo(daySessions.size, Stats.dayMarks(daySessions, slots))
                 },
