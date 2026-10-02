@@ -7,9 +7,12 @@ log stays in a local database on your phone.
 
 ## Features
 
-- **Training calendar**: a month view where each day you trained is coloured by that day's
-  best session rating. Swipe or use the arrows to change month, and tap a day to see or add
-  its sessions. Monthly totals and your weekly training streak sit under the calendar.
+- **Training calendar**: a month view where every martial art has its own colour, and the
+  brighter the colour, the better that day's session was rated. Unrated sessions are
+  hatched, and a day with several arts is split into stripes. The first week also shows the
+  last days of the previous month; tap one to jump to that month. Swipe or use the arrows
+  to change month, and tap a day to see or add its sessions. Monthly totals and your weekly
+  training streak sit under the calendar.
 - **Session log**: date, duration, martial art (it remembers the ones you use), session type
   (class, open mat, sparring, private, solo, competition) and notes.
 - **Techniques per session**: pick techniques from your library or create them as you go.

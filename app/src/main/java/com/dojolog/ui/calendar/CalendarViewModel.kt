@@ -5,10 +5,12 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.dojolog.data.TrainingRepository
+import com.dojolog.domain.DayMark
 import com.dojolog.domain.PeriodSummary
 import com.dojolog.domain.Stats
 import com.dojolog.domain.Streaks
 import com.dojolog.domain.TrainingSession
+import com.dojolog.domain.disciplineKey
 import com.dojolog.ui.firstDayOfWeek
 import com.dojolog.ui.repository
 import kotlinx.coroutines.Dispatchers
@@ -23,15 +25,23 @@ import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
 
-/** [heat] is the rating step of the day's best session (0 = trained but unrated). */
-data class DayInfo(val sessions: Int, val heat: Int)
+/** [marks] holds one colour mark per martial art trained that day. */
+data class DayInfo(val sessions: Int, val marks: List<DayMark>)
+
+/** A martial art shown in the calendar legend: its [key] picks the colour. */
+data class LegendEntry(val key: String, val name: String)
 
 data class CalendarUiState(
     val month: YearMonth,
     val selected: LocalDate,
     val today: LocalDate,
     val firstDayOfWeek: DayOfWeek,
+    /** First cell of the grid: the 1st, or the start of its week in the previous month. */
+    val gridStart: LocalDate = Stats.calendarGridStart(month, firstDayOfWeek),
+    /** Days with training, for every date shown in the grid. */
     val days: Map<LocalDate, DayInfo> = emptyMap(),
+    /** The martial arts trained on the days shown, in colour-slot order. */
+    val legend: List<LegendEntry> = emptyList(),
     val selectedSessions: List<TrainingSession> = emptyList(),
     val monthSummary: PeriodSummary = Stats.summarize(emptyList()),
     val streaks: Streaks = Streaks(0, 0),
@@ -47,6 +57,9 @@ class CalendarViewModel(repository: TrainingRepository) : ViewModel() {
     val state: StateFlow<CalendarUiState> =
         combine(repository.observeSessions(), month, selected) { sessions, month, selected ->
             val inMonth = sessions.filter { YearMonth.from(it.date) == month }
+            val slots = Stats.disciplineSlots(sessions)
+            val gridStart = Stats.calendarGridStart(month, weekStart)
+            val shown = sessions.filter { !it.date.isBefore(gridStart) && !it.date.isAfter(month.atEndOfMonth()) }
             // Paging to another month moves the selection there: today, else the latest
             // training day, else the 1st. Coming back restores the explicit selection.
             val effectiveSelection = when {
@@ -59,9 +72,11 @@ class CalendarViewModel(repository: TrainingRepository) : ViewModel() {
                 selected = effectiveSelection,
                 today = today,
                 firstDayOfWeek = weekStart,
-                days = inMonth.groupBy { it.date }.mapValues { (_, daySessions) ->
-                    DayInfo(daySessions.size, Stats.heatLevel(daySessions.maxOf { it.overall }))
+                gridStart = gridStart,
+                days = shown.groupBy { it.date }.mapValues { (_, daySessions) ->
+                    DayInfo(daySessions.size, Stats.dayMarks(daySessions, slots))
                 },
+                legend = legendFor(shown, sessions, slots),
                 selectedSessions = sessions.filter { it.date == effectiveSelection }.sortedBy { it.createdAt },
                 monthSummary = Stats.summarize(inMonth),
                 streaks = Stats.streaks(sessions.map { it.date }, today, weekStart),
@@ -74,6 +89,22 @@ class CalendarViewModel(repository: TrainingRepository) : ViewModel() {
                 SharingStarted.WhileSubscribed(5_000),
                 CalendarUiState(YearMonth.from(today), today, today, weekStart),
             )
+
+    /** The arts in [shown], named as first written, in slot order. */
+    private fun legendFor(
+        shown: List<TrainingSession>,
+        all: List<TrainingSession>,
+        slots: Map<String, Int>,
+    ): List<LegendEntry> {
+        val keys = shown.map { disciplineKey(it.discipline) }.toSet()
+        return all
+            .filter { disciplineKey(it.discipline) in keys }
+            .groupBy { disciplineKey(it.discipline) }
+            .map { (key, group) ->
+                LegendEntry(key, group.minBy { it.createdAt }.discipline.trim().ifEmpty { "Unspecified" })
+            }
+            .sortedWith(compareBy<LegendEntry> { slots[it.key] ?: Int.MAX_VALUE }.thenBy { it.key })
+    }
 
     fun showPreviousMonth() = month.update { it.minusMonths(1) }
 

@@ -41,6 +41,7 @@ import com.dojolog.ui.components.SectionCard
 import com.dojolog.ui.components.StatTile
 import com.dojolog.ui.components.TileRow
 import com.dojolog.ui.theme.DojoColors
+import com.dojolog.ui.theme.LocalDisciplineColors
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -258,12 +259,14 @@ private fun DisciplinesCard(overview: Overview) {
         subtitle = "Time trained",
     ) {
         val most = overview.disciplines.maxOfOrNull { it.minutes }?.coerceAtLeast(1) ?: 1
+        val colors = LocalDisciplineColors.current
         overview.disciplines.forEach { share ->
             MeterRow(
                 label = share.name,
                 fraction = share.minutes / most.toFloat(),
                 valueText = Fmt.hours(share.minutes),
                 supporting = Fmt.count(share.sessions, "session"),
+                color = colors.rampForKey(share.key).identity,
             )
         }
     }

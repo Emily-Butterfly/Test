@@ -67,7 +67,8 @@ data class TechniqueDetail(
     val sessionsLast30Days: Int,
 )
 
-data class DisciplineShare(val name: String, val sessions: Int, val minutes: Int)
+/** [key] is the art's [disciplineKey]; [name] is how it was first written. */
+data class DisciplineShare(val key: String, val name: String, val sessions: Int, val minutes: Int)
 
 data class Overview(
     val summary: PeriodSummary,
@@ -82,7 +83,16 @@ data class Overview(
 /** Consecutive calendar weeks with at least one session. */
 data class Streaks(val currentWeeks: Int, val longestWeeks: Int)
 
+/** One martial art trained on a calendar day, at the colour step of its best rating there. */
+data class DayMark(val disciplineKey: String, val level: Int)
+
 const val TREND_POINTS = 30
+
+/** How many martial arts one calendar day shows side by side. */
+const val MAX_DAY_MARKS = 3
+
+/** Identity of a martial art: names are compared ignoring case and surrounding spaces. */
+fun disciplineKey(name: String): String = name.trim().lowercase()
 
 object Stats {
 
@@ -94,6 +104,42 @@ object Stats {
         score < 9f -> 3
         else -> 4
     }
+
+    /**
+     * Colour slot of every named martial art, in the order each was first logged, so an art
+     * keeps its colour while others are added later. Unnamed sessions get no slot.
+     */
+    fun disciplineSlots(sessions: List<TrainingSession>): Map<String, Int> =
+        sessions
+            .filter { disciplineKey(it.discipline).isNotEmpty() }
+            .groupBy { disciplineKey(it.discipline) }
+            .map { (key, group) -> key to group.minOf { it.createdAt } }
+            .sortedWith(compareBy<Pair<String, Long>> { it.second }.thenBy { it.first })
+            .mapIndexed { slot, (key, _) -> key to slot }
+            .toMap()
+
+    /**
+     * The martial arts trained on one day, each at the colour step of its best rating that
+     * day (0 when none of its sessions is rated), in slot order. With more than [maxMarks]
+     * arts, the best rated ones are kept.
+     */
+    fun dayMarks(
+        daySessions: List<TrainingSession>,
+        slots: Map<String, Int>,
+        maxMarks: Int = MAX_DAY_MARKS,
+    ): List<DayMark> {
+        val slotOrder = compareBy<DayMark> { slots[it.disciplineKey] ?: Int.MAX_VALUE }.thenBy { it.disciplineKey }
+        return daySessions
+            .groupBy { disciplineKey(it.discipline) }
+            .map { (key, group) -> DayMark(key, heatLevel(group.maxOf { it.overall })) }
+            .sortedWith(compareByDescending<DayMark> { it.level }.then(slotOrder))
+            .take(maxMarks)
+            .sortedWith(slotOrder)
+    }
+
+    /** First day shown in a month grid: the start of the week containing the 1st. */
+    fun calendarGridStart(month: YearMonth, firstDayOfWeek: DayOfWeek): LocalDate =
+        weekStart(month.atDay(1), firstDayOfWeek)
 
     fun summarize(sessions: List<TrainingSession>): PeriodSummary {
         val rated = sessions.filter { it.isRated }
@@ -244,9 +290,10 @@ object Stats {
             )
             .take(5)
         val disciplines = selected
-            .groupBy { it.discipline.trim().lowercase() }
-            .map { (_, group) ->
+            .groupBy { disciplineKey(it.discipline) }
+            .map { (key, group) ->
                 DisciplineShare(
+                    key = key,
                     name = group.first().discipline.trim().ifEmpty { "Unspecified" },
                     sessions = group.size,
                     minutes = group.sumOf { it.durationMinutes },

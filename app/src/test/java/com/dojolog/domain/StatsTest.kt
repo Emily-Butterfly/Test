@@ -20,6 +20,7 @@ class StatsTest {
         ratings: Ratings = Ratings(),
         discipline: String = "BJJ",
         techniques: List<TechniqueEntry> = emptyList(),
+        createdAt: Long = id,
     ) = TrainingSession(
         id = id,
         date = date,
@@ -29,6 +30,7 @@ class StatsTest {
         overall = overall,
         ratings = ratings,
         techniques = techniques,
+        createdAt = createdAt,
     )
 
     private fun entry(technique: Technique, reps: Int = 0, quality: Int = 0) =
@@ -214,5 +216,62 @@ class StatsTest {
         assertEquals(listOf(0f, 1f), Stats.niceTicks(0f, minStep = 1f))
         assertEquals(listOf(0f, 1f), Stats.niceTicks(1f, minStep = 1f))
         assertEquals(listOf(0f, 50f, 100f, 150f), Stats.niceTicks(130f))
+    }
+
+    @Test
+    fun disciplineSlotsFollowFirstLoggedOrderAndIgnoreCase() {
+        val sessions = listOf(
+            session(1, today, discipline = "Muay Thai", createdAt = 300),
+            session(2, today.minusDays(30), discipline = "bjj", createdAt = 100),
+            session(3, today, discipline = " BJJ ", createdAt = 400),
+            session(4, today.minusDays(60), discipline = "Judo", createdAt = 200),
+            session(5, today, discipline = "  ", createdAt = 50),
+        )
+        // Ordered by when each art was first logged, not by the session date.
+        assertEquals(mapOf("bjj" to 0, "judo" to 1, "muay thai" to 2), Stats.disciplineSlots(sessions))
+    }
+
+    @Test
+    fun newDisciplinesDoNotRepaintExistingOnes() {
+        val before = listOf(session(1, today, discipline = "BJJ", createdAt = 1), session(2, today, discipline = "Boxing", createdAt = 2))
+        val after = before + session(3, today.minusDays(400), discipline = "Aikido", createdAt = 3)
+        val slotsBefore = Stats.disciplineSlots(before)
+        val slotsAfter = Stats.disciplineSlots(after)
+        assertEquals(slotsBefore, slotsAfter.filterKeys { it in slotsBefore })
+        assertEquals(2, slotsAfter["aikido"])
+    }
+
+    @Test
+    fun dayMarksUseTheBestRatingPerDisciplineInSlotOrder() {
+        val slots = mapOf("bjj" to 0, "judo" to 1, "muay thai" to 2, "boxing" to 3)
+        val day = listOf(
+            session(1, today, overall = 6f, discipline = "Muay Thai"),
+            session(2, today, overall = 9.5f, discipline = "muay thai"),
+            session(3, today, overall = 0f, discipline = "BJJ"),
+        )
+        assertEquals(listOf(DayMark("bjj", 0), DayMark("muay thai", 4)), Stats.dayMarks(day, slots))
+
+        // Four arts on one day: the three best rated stay, still in slot order.
+        val busy = listOf(
+            session(1, today, overall = 3f, discipline = "BJJ"),
+            session(2, today, overall = 8f, discipline = "Judo"),
+            session(3, today, overall = 6f, discipline = "Muay Thai"),
+            session(4, today, overall = 10f, discipline = "Boxing"),
+        )
+        assertEquals(
+            listOf(DayMark("judo", 3), DayMark("muay thai", 2), DayMark("boxing", 4)),
+            Stats.dayMarks(busy, slots),
+        )
+        assertEquals(emptyList<DayMark>(), Stats.dayMarks(emptyList(), slots))
+    }
+
+    @Test
+    fun calendarGridStartsOnTheWeekOfTheFirst() {
+        // October 2026 starts on a Thursday.
+        val october = java.time.YearMonth.of(2026, 10)
+        assertEquals(LocalDate.of(2026, 9, 28), Stats.calendarGridStart(october, DayOfWeek.MONDAY))
+        assertEquals(LocalDate.of(2026, 9, 27), Stats.calendarGridStart(october, DayOfWeek.SUNDAY))
+        // June 2026 starts on a Monday: no days from May are shown.
+        assertEquals(LocalDate.of(2026, 6, 1), Stats.calendarGridStart(java.time.YearMonth.of(2026, 6), DayOfWeek.MONDAY))
     }
 }

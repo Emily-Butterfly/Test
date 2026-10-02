@@ -15,10 +15,13 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
@@ -28,6 +31,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.dojolog.data.TrainingRepository
 import com.dojolog.ui.calendar.CalendarScreen
 import com.dojolog.ui.session.SessionDetailScreen
 import com.dojolog.ui.session.SessionEditorScreen
@@ -35,6 +39,8 @@ import com.dojolog.ui.session.SessionEditorViewModel
 import com.dojolog.ui.stats.StatsScreen
 import com.dojolog.ui.techniques.TechniqueDetailScreen
 import com.dojolog.ui.techniques.TechniquesScreen
+import com.dojolog.ui.theme.DisciplineColors
+import com.dojolog.ui.theme.LocalDisciplineColors
 import java.time.LocalDate
 
 private object Routes {
@@ -59,7 +65,19 @@ private enum class TopLevel(val route: String, val label: String, val icon: Imag
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun DojoLogRoot() {
+fun DojoLogRoot(repository: TrainingRepository) {
+    // Every screen colours martial arts the same way, so the assignment is provided once here.
+    val slotsFlow = remember(repository) { repository.observeDisciplineSlots() }
+    val slots by slotsFlow.collectAsStateWithLifecycle(initialValue = emptyMap())
+    val disciplineColors = remember(slots) { DisciplineColors(slots) }
+    CompositionLocalProvider(LocalDisciplineColors provides disciplineColors) {
+        DojoLogScaffold()
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun DojoLogScaffold() {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route

@@ -421,7 +421,7 @@ private fun RatingCard(
                     color = DojoColors.TextMuted,
                 )
             }
-            ScoreBadge(state.overall, large = true)
+            ScoreBadge(state.overall, state.discipline, large = true)
         }
         Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(

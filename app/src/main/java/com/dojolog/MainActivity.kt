@@ -17,9 +17,10 @@ class MainActivity : ComponentActivity() {
             navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
         )
         super.onCreate(savedInstanceState)
+        val repository = (application as DojoLogApp).repository
         setContent {
             DojoLogTheme {
-                DojoLogRoot()
+                DojoLogRoot(repository)
             }
         }
     }

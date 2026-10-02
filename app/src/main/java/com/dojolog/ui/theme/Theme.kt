@@ -21,8 +21,6 @@ object DojoColors {
     val TextPrimary = Color(0xFFECEEF2)
     val TextSecondary = Color(0xFFA6ACB8)
     val TextMuted = Color(0xFF7D8390)
-    /** Dark ink for text set on the brightest accent fills. */
-    val InkOnBright = Color(0xFF1C0B0A)
 
     val Primary = Color(0xFFFF6B63)
     val OnPrimary = Color(0xFF2E0807)
@@ -37,23 +35,8 @@ object DojoColors {
 
     // Charts: a single validated accent series on the dark card surface, recessive chrome.
     val ChartSeries = Color(0xFFE8524C)
-    val ChartTrack = Color(0x2EE8524C)
     val Grid = Color(0xFF262A32)
     val Baseline = Color(0xFF3A3F4B)
-
-    /** Ordinal rating ramp (weak -> strong), validated against the dark surfaces. */
-    val HeatRamp = listOf(
-        Color(0xFF7D3A3A),
-        Color(0xFFA8443F),
-        Color(0xFFD2514B),
-        Color(0xFFFF7268),
-    )
-    /** Trained but unrated. */
-    val HeatUnrated = Color(0xFF353A45)
-
-    fun heat(level: Int): Color = if (level <= 0) HeatUnrated else HeatRamp[level.coerceAtMost(HeatRamp.size) - 1]
-
-    fun onHeat(level: Int): Color = if (level >= HeatRamp.size) InkOnBright else Color.White
 }
 
 private val DarkScheme = darkColorScheme(

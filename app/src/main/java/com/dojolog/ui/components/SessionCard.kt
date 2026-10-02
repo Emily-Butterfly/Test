@@ -59,7 +59,7 @@ fun SessionCard(
                 }
             }
             Spacer(Modifier.width(12.dp))
-            ScoreBadge(session.overall)
+            ScoreBadge(session.overall, session.discipline)
         }
     }
 }

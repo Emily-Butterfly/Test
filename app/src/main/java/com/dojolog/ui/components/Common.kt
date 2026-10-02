@@ -31,7 +31,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -46,6 +49,8 @@ import com.dojolog.domain.MAX_SCORE
 import com.dojolog.domain.Stats
 import com.dojolog.ui.Fmt
 import com.dojolog.ui.theme.DojoColors
+import com.dojolog.ui.theme.LocalDisciplineColors
+import com.dojolog.ui.theme.Ramp
 
 @Composable
 fun SectionCard(
@@ -119,20 +124,23 @@ fun TileRow(content: @Composable RowScope.() -> Unit) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), content = content)
 }
 
-/** A session score on the rating ramp; an outlined dash when unrated. */
+/**
+ * A session score in its martial art's colour, brighter for better ratings; an outline in
+ * the art's colour around a dash when unrated.
+ */
 @Composable
-fun ScoreBadge(score: Float, modifier: Modifier = Modifier, large: Boolean = false) {
+fun ScoreBadge(score: Float, discipline: String, modifier: Modifier = Modifier, large: Boolean = false) {
     val shape = RoundedCornerShape(if (large) 14.dp else 10.dp)
-    val rated = score > 0f
     val level = Stats.heatLevel(score)
-    val description = if (rated) "Rating ${Fmt.score(score)} out of $MAX_SCORE" else "Not rated"
+    val ramp = LocalDisciplineColors.current.ramp(discipline)
+    val description = if (level > 0) "Rating ${Fmt.score(score)} out of $MAX_SCORE" else "Not rated"
     Box(
         modifier = modifier
             .defaultMinSize(minWidth = if (large) 64.dp else 44.dp, minHeight = if (large) 48.dp else 32.dp)
             .clip(shape)
             .then(
-                if (rated) Modifier.background(DojoColors.heat(level))
-                else Modifier.border(1.dp, DojoColors.Outline, shape),
+                if (level > 0) Modifier.background(ramp.fill(level))
+                else Modifier.border(1.5.dp, ramp.identity, shape),
             )
             .padding(horizontal = 10.dp, vertical = 4.dp)
             .clearAndSetSemantics { contentDescription = description },
@@ -142,8 +150,27 @@ fun ScoreBadge(score: Float, modifier: Modifier = Modifier, large: Boolean = fal
             text = Fmt.score(score),
             style = if (large) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.Bold,
-            color = if (rated) DojoColors.onHeat(level) else DojoColors.TextMuted,
+            color = if (level > 0) ramp.ink(level) else DojoColors.TextMuted,
         )
+    }
+}
+
+/** Diagonal hatching in a martial art's colour: trained, but not rated. */
+fun Modifier.unratedHatch(ramp: Ramp): Modifier = drawBehind {
+    clipRect {
+        drawRect(ramp.steps[0].copy(alpha = 0.30f))
+        val gap = 5.dp.toPx()
+        val stroke = 1.5.dp.toPx()
+        var x = -size.height
+        while (x < size.width) {
+            drawLine(
+                color = ramp.identity.copy(alpha = 0.8f),
+                start = Offset(x, size.height),
+                end = Offset(x + size.height, 0f),
+                strokeWidth = stroke,
+            )
+            x += gap
+        }
     }
 }
 
@@ -183,16 +210,16 @@ fun StarRating(
     }
 }
 
-/** Horizontal bar with a lighter track of the same hue. [fraction] is clamped to 0..1. */
+/** Horizontal bar with a faint track of the same hue. [fraction] is clamped to 0..1. */
 @Composable
-fun Meter(fraction: Float, modifier: Modifier = Modifier) {
+fun Meter(fraction: Float, modifier: Modifier = Modifier, color: Color = DojoColors.ChartSeries) {
     val shape = RoundedCornerShape(4.dp)
     Box(
         modifier
             .fillMaxWidth()
             .height(8.dp)
             .clip(shape)
-            .background(DojoColors.ChartTrack),
+            .background(color.copy(alpha = 0.18f)),
     ) {
         val clamped = fraction.coerceIn(0f, 1f)
         if (clamped > 0f) {
@@ -201,7 +228,7 @@ fun Meter(fraction: Float, modifier: Modifier = Modifier) {
                     .fillMaxWidth(clamped)
                     .fillMaxHeight()
                     .clip(shape)
-                    .background(DojoColors.ChartSeries),
+                    .background(color),
             )
         }
     }
@@ -214,6 +241,7 @@ fun MeterRow(
     valueText: String,
     modifier: Modifier = Modifier,
     supporting: String? = null,
+    color: Color = DojoColors.ChartSeries,
     onClick: (() -> Unit)? = null,
 ) {
     Column(
@@ -243,7 +271,7 @@ fun MeterRow(
             Text(supporting, style = MaterialTheme.typography.bodySmall, color = DojoColors.TextMuted)
         }
         Spacer(Modifier.height(6.dp))
-        Meter(fraction)
+        Meter(fraction, color = color)
     }
 }
 
@@ -315,15 +343,15 @@ fun EmptyState(
     }
 }
 
-/** A coloured square plus a label, for chart and calendar legends. */
+/** A coloured square plus a label, for chart and calendar legends; hatched when [hatch] is set. */
 @Composable
-fun LegendSwatch(color: Color, label: String) {
+fun LegendSwatch(color: Color, label: String, hatch: Ramp? = null) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Box(
             Modifier
                 .size(12.dp)
                 .clip(RoundedCornerShape(3.dp))
-                .background(color),
+                .then(if (hatch != null) Modifier.unratedHatch(hatch) else Modifier.background(color)),
         )
         Spacer(Modifier.size(4.dp))
         Text(label, style = MaterialTheme.typography.labelSmall, color = DojoColors.TextSecondary)

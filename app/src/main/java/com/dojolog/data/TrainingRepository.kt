@@ -7,11 +7,13 @@ import com.dojolog.data.db.SessionTechniqueEntity
 import com.dojolog.data.db.SessionWithEntries
 import com.dojolog.data.db.TechniqueEntity
 import com.dojolog.domain.SessionType
+import com.dojolog.domain.Stats
 import com.dojolog.domain.Technique
 import com.dojolog.domain.TechniqueCategory
 import com.dojolog.domain.TechniqueEntry
 import com.dojolog.domain.TrainingSession
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 
 /** Single source of truth for the app; everything is stored in the local Room database. */
@@ -29,6 +31,10 @@ class TrainingRepository(private val db: AppDatabase) {
     suspend fun getSession(id: Long): TrainingSession? = sessionDao.get(id)?.toDomain()
 
     fun observeRecentDisciplines(): Flow<List<String>> = sessionDao.observeRecentDisciplines()
+
+    /** Colour slot per martial art; see [Stats.disciplineSlots]. */
+    fun observeDisciplineSlots(): Flow<Map<String, Int>> =
+        observeSessions().map { Stats.disciplineSlots(it) }.distinctUntilChanged()
 
     fun observeTechniques(): Flow<List<Technique>> =
         techniqueDao.observeAll().map { rows -> rows.map { it.toDomain() } }

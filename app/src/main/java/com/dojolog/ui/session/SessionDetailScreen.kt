@@ -163,7 +163,7 @@ private fun SessionDetailContent(
                     }
                     Spacer(Modifier.width(12.dp))
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        ScoreBadge(session.overall, large = true)
+                        ScoreBadge(session.overall, session.discipline, large = true)
                         Spacer(Modifier.height(4.dp))
                         Text(
                             if (session.isRated) "Overall / $MAX_SCORE" else "Overall",
